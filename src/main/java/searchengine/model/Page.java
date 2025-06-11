@@ -38,6 +38,7 @@ public class Page {
     private Site site;
 
     @Column(name = "path", nullable = false, columnDefinition = "TEXT")
+    // TODO AND PATTERN AND INDEX
     private String path;
 
     @Column(name = "code", nullable = false)

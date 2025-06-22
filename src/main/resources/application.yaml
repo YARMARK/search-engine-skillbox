@@ -15,11 +15,13 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
+    open-in-view: true
 
   sql:
     init:
       mode: always
       schema-locations: classpath:db/create_index.sql
+
 indexing-settings:
   sites:
     - url: https://www.lenta.ru
@@ -28,3 +30,5 @@ indexing-settings:
       name: Skillbox
     - url: https://www.playback.ru
       name: PlayBack.Ru
+  referrer: https://www.google.com
+  user-agent: MarikSearchBot

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @RequiredArgsConstructor
@@ -38,7 +39,7 @@ public class IndexingServiceImpl implements IndexingService {
     @Override
     public void startIndexing() {
 
-        for (SiteInfo info : sitesList.getSiteInfos()) {
+        for (SiteInfo info : sitesList.getSites()) {
             Thread thread = new Thread(() -> {
                 try {
                     processSite(info, sitesList.getReferrer(), sitesList.getUserAgent());

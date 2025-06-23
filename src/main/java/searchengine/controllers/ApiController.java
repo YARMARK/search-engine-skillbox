@@ -60,7 +60,6 @@ public class ApiController {
             response.setError("Индексация не запущена");
             return response;
         }
-
         try {
             indexingService.stopIndexing();
             indexingStatus.set(false);

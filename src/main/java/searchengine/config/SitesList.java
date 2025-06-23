@@ -13,7 +13,7 @@ import java.util.List;
 @ConfigurationProperties(prefix = "indexing-settings")
 public class SitesList {
 
-    private List<SiteInfo> siteInfos;
+    private List<SiteInfo> sites;
 
     private String referrer;
 

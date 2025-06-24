@@ -1,4 +1,26 @@
-# example values
+spring:
+  application:
+    name: search-engine
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${mysql.url}
+    username: ${mysql.username}
+    password: ${mysql.password}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+    open-in-view: true
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/create_index.sql
 
 indexing-settings:
   sites:
@@ -6,5 +28,7 @@ indexing-settings:
       name: Лента.ру
     - url: https://www.skillbox.ru
       name: Skillbox
-    - url: https://www.playback.ru
-      name: PlayBack.Ru
+#    - url: https://www.playback.ru
+#      name: PlayBack.Ru
+  referrer: https://www.google.com
+  user-agent: MarikSearchBot

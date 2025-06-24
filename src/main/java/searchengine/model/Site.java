@@ -6,13 +6,12 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 import static jakarta.persistence.EnumType.STRING;
@@ -22,11 +21,9 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 @Table(name = "site")
 @Getter
 @Setter
-@AllArgsConstructor
-@NoArgsConstructor
 @ToString
 @EqualsAndHashCode
-public class Site {
+public class Site implements Serializable {
 
     @Id
     @GeneratedValue(strategy = IDENTITY)

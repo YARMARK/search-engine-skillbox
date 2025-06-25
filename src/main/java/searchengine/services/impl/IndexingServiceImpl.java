@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import searchengine.config.SiteInfo;
 import searchengine.config.SitesList;
+import searchengine.dto.response.IndexingResponse;
 import searchengine.model.Site;
 import searchengine.model.SiteStatus;
 import searchengine.repository.PageRepository;
@@ -17,7 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @RequiredArgsConstructor
@@ -36,8 +36,16 @@ public class IndexingServiceImpl implements IndexingService {
 
     private static final String INDEXING_WAS_TERMINATED_BY_USER = "Индексация остановлена пользователем";
 
+    private static final String INDEXING_IS_ALREADY_STARTED = "Индексация уже запущена";
+
+    private static final String INDEXING_IS_NOT_STARTED = "Индексация не запущена";
+
     @Override
-    public void startIndexing() {
+    public IndexingResponse startIndexing() {
+        if (isIndexingStarted()) {
+            log.warn("Indexing is already started");
+            return new IndexingResponse(INDEXING_IS_ALREADY_STARTED);
+        }
 
         for (SiteInfo info : sitesList.getSites()) {
             Thread thread = new Thread(() -> {
@@ -50,6 +58,7 @@ public class IndexingServiceImpl implements IndexingService {
             threads.add(thread);
             thread.start();
         }
+        return new IndexingResponse();
     }
 
     private void processSite(SiteInfo info, String referrer, String userAgent) throws InterruptedException {
@@ -99,7 +108,10 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     @Override
-    public void stopIndexing() {
+    public IndexingResponse stopIndexing() {
+        if (!isIndexingStarted()) {
+            return new IndexingResponse(INDEXING_IS_NOT_STARTED);
+        }
         threads.forEach(Thread::interrupt);
         threads.clear();
 
@@ -118,5 +130,11 @@ public class IndexingServiceImpl implements IndexingService {
         for (Site site : siteRepository.findByStatus(SiteStatus.INDEXING)) {
             updateSiteStatus(site, SiteStatus.FAILED, INDEXING_WAS_TERMINATED_BY_USER);
         }
+        return new IndexingResponse();
+    }
+
+    boolean isIndexingStarted() {
+        List<Site> byStatus = siteRepository.findByStatus(SiteStatus.INDEXING);
+        return !byStatus.isEmpty();
     }
 }

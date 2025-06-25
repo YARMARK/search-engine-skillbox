@@ -32,24 +32,8 @@ public class ApiController {
     }
 
     @GetMapping("/startIndexing")
-    public IndexingResponse startIndexing() {
-        IndexingResponse response = new IndexingResponse();
-        if (indexingStatus.get()) {
-            response.setResult(false);
-            response.setError("Индексация уже запущена");
-            return response;
-        }
-
-        try {
-            indexingService.startIndexing();
-            indexingStatus.set(true);
-            response.setResult(true);
-            return response;
-        } catch (Exception e) {
-            response.setResult(false);
-            response.setError("Ошибка при запуске индексации: " + e.getMessage());
-            return response;
-        }
+    public ResponseEntity<IndexingResponse> startIndexing() {
+        return ResponseEntity.ok(indexingService.startIndexing());
     }
 
     @GetMapping("/stopIndexing")

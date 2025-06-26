@@ -12,4 +12,10 @@ public interface PageRepository extends JpaRepository<Page, Integer> {
 
     @Transactional
     void deleteBySite(Site site);
+
+    @Transactional
+    boolean existsPageByPath(String siteUrl);
+
+    @Transactional
+    void deletePageByPath(String url);
 }

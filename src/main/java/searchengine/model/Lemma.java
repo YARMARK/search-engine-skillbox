@@ -24,7 +24,7 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 @AllArgsConstructor
 @NoArgsConstructor
 @ToString
-public class Lemma implements Serializable {
+public class Lemma implements Serializable, Comparable<Lemma> {
 
     @Id
     @GeneratedValue(strategy = IDENTITY)
@@ -40,4 +40,15 @@ public class Lemma implements Serializable {
 
     @Column(name = "frequency", nullable = false)
     private int frequency;
+
+    @Override
+    public int compareTo(Lemma o) {
+        if (frequency > o.getFrequency()) {
+            return 1;
+        } else if (frequency < o.getFrequency()) {
+            return -1;
+        }
+
+        return 0;
+    }
 }

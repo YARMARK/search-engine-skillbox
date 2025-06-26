@@ -28,16 +28,13 @@ public class PageCrawler extends RecursiveAction {
     private static final int MIN_DELAY_MS = 100;
     private static final int MAX_DELAY_MS = 150;
 
-    // File extensions that should be skipped
     private static final Set<String> SKIPPED_FILE_EXTENSIONS = Set.of(
             ".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf",
             ".eps", ".xlsx", ".doc", ".pptx", ".docx"
     );
 
-    // URL patterns to skip
     private static final Pattern SKIP_PATTERNS = Pattern.compile("\\?_ga|#");
 
-    // URL prefix patterns for cleaning
     private static final String[] URL_PREFIXES = {
             "http://www.", "https://www.", "http://", "https://", "www."
     };
@@ -48,7 +45,7 @@ public class PageCrawler extends RecursiveAction {
     private final Site site;
     private final PageRepository pageRepository;
     private final SiteRepository siteRepository;
-    private final Set<String> visitedLinks;
+    private final CopyOnWriteArraySet<String> visitedLinks;
 
     public PageCrawler(String url, String userAgent, String referrer, Site site,
                        PageRepository pageRepository, SiteRepository siteRepository) {

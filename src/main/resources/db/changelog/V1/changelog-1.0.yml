@@ -1,0 +1,159 @@
+databaseChangeLog:
+  - changeSet:
+      id: create-site-table
+      author: Yaraslau Markau
+      changes:
+        - createTable:
+            tableName: site
+            columns:
+              - column:
+                  name: id
+                  type: INT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status_time
+                  type: DATETIME
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_error
+                  type: TEXT
+              - column:
+                  name: url
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: create-page-table
+      author: Yaraslau Markau
+      changes:
+        - createTable:
+            tableName: page
+            columns:
+              - column:
+                  name: id
+                  type: INT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: site_id
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: path
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: content
+                  type: MEDIUMTEXT
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: page
+            baseColumnNames: site_id
+            constraintName: fk_page_site
+            referencedTableName: site
+            referencedColumnNames: id
+
+  - changeSet:
+      id: create-lemma-table
+      author: Yaraslau Markau
+      changes:
+        - createTable:
+            tableName: lemma
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: site_id
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: lemma
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: frequency
+                  type: INT
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: lemma
+            baseColumnNames: site_id
+            constraintName: fk_lemma_site
+            referencedTableName: site
+            referencedColumnNames: id
+
+  - changeSet:
+      id: create-index-table
+      author: Yaraslau Markau
+      changes:
+        - createTable:
+            tableName: index_table
+            columns:
+              - column:
+                  name: id
+                  type: INT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: page_id
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: lemma_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: index_rank
+                  type: FLOAT
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: index_table
+            baseColumnNames: page_id
+            constraintName: fk_index_page
+            referencedTableName: page
+            referencedColumnNames: id
+        - addForeignKeyConstraint:
+            baseTableName: index_table
+            baseColumnNames: lemma_id
+            constraintName: fk_index_lemma
+            referencedTableName: lemma
+            referencedColumnNames: id
+

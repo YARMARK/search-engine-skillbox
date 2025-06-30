@@ -10,6 +10,7 @@ import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
+import searchengine.services.LemmaService;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -45,11 +46,12 @@ public class PageCrawler extends RecursiveAction {
     private final Site site;
     private final PageRepository pageRepository;
     private final SiteRepository siteRepository;
+    private final LemmaService lemmaService;
     private final CopyOnWriteArraySet<String> visitedLinks;
 
     public PageCrawler(String url, String userAgent, String referrer, Site site,
-                       PageRepository pageRepository, SiteRepository siteRepository) {
-        this(url, userAgent, referrer, site, pageRepository, siteRepository, new CopyOnWriteArraySet<>());
+                       PageRepository pageRepository, SiteRepository siteRepository, LemmaService lemmaService) {
+        this(url, userAgent, referrer, site, pageRepository, siteRepository, lemmaService, new CopyOnWriteArraySet<>());
     }
 
     @Override
@@ -84,6 +86,10 @@ public class PageCrawler extends RecursiveAction {
         }
 
         Document document = response.parse();
+
+        if (response.statusCode() >= 400 && response.statusCode() < 600) {
+            return;
+        }
 
         if (shouldProcessPage()) {
             savePage(response, document);

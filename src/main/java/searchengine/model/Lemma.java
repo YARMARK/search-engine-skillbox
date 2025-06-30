@@ -36,7 +36,7 @@ public class Lemma implements Serializable, Comparable<Lemma> {
     private Site site;
 
     @Column(name = "lemma",nullable = false)
-    private String lemmaValue;
+    private String lemma;
 
     @Column(name = "frequency", nullable = false)
     private int frequency;

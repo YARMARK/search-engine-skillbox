@@ -9,8 +9,10 @@ import java.util.List;
 
 public interface SiteRepository extends JpaRepository<Site, Integer> {
 
+    @Transactional(readOnly = true)
     Site findByUrl(String url);
 
+    @Transactional(readOnly = true)
     List<Site> findByStatus(SiteStatus status);
 
     @Transactional

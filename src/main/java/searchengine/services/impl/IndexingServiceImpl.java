@@ -9,10 +9,13 @@ import org.springframework.stereotype.Service;
 import searchengine.config.SiteInfo;
 import searchengine.config.SitesList;
 import searchengine.dto.response.IndexingResponse;
+import searchengine.model.Lemma;
 import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.model.SiteStatus;
+import searchengine.repository.LemmaRepository;
 import searchengine.repository.PageRepository;
+import searchengine.repository.SearchIndexRepository;
 import searchengine.repository.SiteRepository;
 import searchengine.services.IndexingService;
 import searchengine.task.PageCrawler;
@@ -40,6 +43,12 @@ public class IndexingServiceImpl implements IndexingService {
 
     private final PageRepository pageRepository;
 
+    private final SearchIndexRepository indexRepository;
+
+    private final LemmaRepository lemmaRepository;
+
+    private final LemmaService lemmaService;
+
     private final List<ForkJoinPool> forkJoinPools = new ArrayList<>();
 
     private final List<Thread> threads = new ArrayList<>();
@@ -53,7 +62,7 @@ public class IndexingServiceImpl implements IndexingService {
 
     @Override
     public IndexingResponse startIndexing() {
-        if (isIndexingStarted()) {
+        if (isIndexingRunning()) {
             log.warn("Indexing is already started");
             return new IndexingResponse(INDEXING_IS_ALREADY_STARTED);
         }
@@ -131,9 +140,22 @@ public class IndexingServiceImpl implements IndexingService {
 
     }
 
+    private void deletePage(Integer pageId) {
+        Page webPage = pageRepository.findById(pageId)
+                .orElseThrow(() -> new RuntimeException("WebPage not found with id " + pageId));
+
+        indexRepository.deleteByPage(webPage);
+        pageRepository.delete(webPage);
+    }
+
     private void deleteExistingData(String siteUrl) {
-        pageRepository.deleteBySiteUrl(siteUrl);
-        siteRepository.deleteByUrl(siteUrl);
+        Site site = siteRepository.findByUrl(siteUrl);
+        pageRepository.findAllBySite(site).forEach(p -> deletePage(p.getId()));
+
+        List<Lemma> allByWebSite = lemmaRepository.findAllBySite(site);
+        lemmaRepository.deleteAll(allByWebSite);
+
+        siteRepository.delete(site);
     }
 
     private Site createAndSaveSite(SiteInfo info) {
@@ -148,7 +170,7 @@ public class IndexingServiceImpl implements IndexingService {
     private void crawlSite(Site site, String userAgent, String referrer) {
         ForkJoinPool forkJoinPool = new ForkJoinPool();
         forkJoinPools.add(forkJoinPool);
-        forkJoinPool.invoke(new PageCrawler(site.getUrl(), userAgent, referrer, site, pageRepository, siteRepository));
+        forkJoinPool.invoke(new PageCrawler(site.getUrl(), userAgent, referrer, site, pageRepository, siteRepository, lemmaService));
     }
 
     private void updateSiteStatus(Site site, SiteStatus status, String error) {
@@ -160,7 +182,7 @@ public class IndexingServiceImpl implements IndexingService {
 
     @Override
     public IndexingResponse stopIndexing() {
-        if (!isIndexingStarted()) {
+        if (!isIndexingRunning()) {
             return new IndexingResponse(INDEXING_IS_NOT_STARTED);
         }
         threads.forEach(Thread::interrupt);
@@ -184,11 +206,13 @@ public class IndexingServiceImpl implements IndexingService {
         return new IndexingResponse();
     }
 
-    boolean isIndexingStarted() {
+    @Override
+    public boolean isIndexingRunning() {
         List<Site> byStatus = siteRepository.findByStatus(SiteStatus.INDEXING);
         return !byStatus.isEmpty();
     }
 
+    // TODO
     @Override
     public IndexingResponse indexPage(String url) {
         SiteInfo info = isPageFromSiteListConfig(url);
@@ -209,6 +233,31 @@ public class IndexingServiceImpl implements IndexingService {
         // Парсим страницу и сохраняем
         parseAndSavePage(url, site);
         return new IndexingResponse();
+    }
+
+    @Override
+    public String getContentByUrl(String url) {
+        return "";
+    }
+
+    @Override
+    public Site getSiteByUrl(String url) {
+        return null;
+    }
+
+    @Override
+    public Long getPagesCount() {
+        return 0l;
+    }
+
+    @Override
+    public Long getSitesCount() {
+        return 0L;
+    }
+
+    @Override
+    public List<Site> getAllWebSites() {
+        return List.of();
     }
 
     private Site findOrCreateSite(SiteInfo info) {

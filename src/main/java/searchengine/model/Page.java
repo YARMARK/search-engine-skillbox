@@ -14,7 +14,7 @@ import lombok.ToString;
 
 import java.io.Serializable;
 
-import static jakarta.persistence.FetchType.LAZY;
+import static jakarta.persistence.FetchType.EAGER;
 import static jakarta.persistence.GenerationType.IDENTITY;
 
 @Entity
@@ -30,7 +30,7 @@ public class Page implements Serializable {
     @Column(name = "id")
     private int id;
 
-    @ManyToOne(fetch = LAZY)
+    @ManyToOne(fetch = EAGER)
     @JoinColumn(name = "site_id", nullable = false, referencedColumnName = "id")
     private Site site;
 

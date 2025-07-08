@@ -47,7 +47,7 @@ public class IndexingServiceImpl implements IndexingService {
 
     private final LemmaRepository lemmaRepository;
 
-    private final LemmaService lemmaService;
+    private final LemmaServiceImpl lemmaService;
 
     private final List<ForkJoinPool> forkJoinPools = new ArrayList<>();
 

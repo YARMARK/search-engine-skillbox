@@ -80,19 +80,19 @@ public class PageCrawler extends RecursiveAction {
         Thread.sleep(generateRandomDelay());
 
         Connection.Response response = fetchPage();
+
         if (isInterrupted()) {
             handleInterruption("after getting connection response");
             return;
         }
 
         Document document = response.parse();
+        if (isValidLink() && isValidStatusCode(response)) {
+            savePage(response, document);
+        }
 
         if (response.statusCode() >= 400 && response.statusCode() < 600) {
             return;
-        }
-
-        if (shouldProcessPage()) {
-            savePage(response, document);
         }
 
         processChildLinks(document);
@@ -113,6 +113,7 @@ public class PageCrawler extends RecursiveAction {
 
         pageRepository.save(page);
         siteRepository.save(site);
+        lemmaService.saveAllLemmas(page);
     }
 
     private Page createPage(Connection.Response response, Document document) {
@@ -154,7 +155,7 @@ public class PageCrawler extends RecursiveAction {
     }
 
     private PageCrawler createChildTask(String nextUrl) {
-        return new PageCrawler(nextUrl, userAgent, referrer, site, pageRepository, siteRepository, visitedLinks);
+        return new PageCrawler(nextUrl, userAgent, referrer, site, pageRepository, siteRepository, lemmaService, visitedLinks);
     }
 
     private void waitForChildTasks(List<PageCrawler> childTasks) {
@@ -163,7 +164,8 @@ public class PageCrawler extends RecursiveAction {
         }
     }
 
-    private boolean shouldProcessPage() {
+
+    private boolean isValidLink() {
         return isLink(url) && !isFile(url);
     }
 
@@ -190,6 +192,11 @@ public class PageCrawler extends RecursiveAction {
         return SKIPPED_FILE_EXTENSIONS.stream()
                 .anyMatch(lowerCaseLink::endsWith);
     }
+
+    private boolean isValidStatusCode(Connection.Response response) {
+        return response.statusCode() < 400;
+    }
+
 
     private int generateRandomDelay() {
         return MIN_DELAY_MS + (int) (Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS));

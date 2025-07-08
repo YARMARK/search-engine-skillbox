@@ -9,12 +9,14 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.ToString;
 
 import java.io.Serializable;
 
 @Entity(name = "index_table")
 @Getter
+@Setter
 @EqualsAndHashCode(exclude = {"id"})
 @ToString(exclude = {"id"})
 public class SearchIndex implements Serializable {

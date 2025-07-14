@@ -16,10 +16,12 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.RecursiveAction;
 import java.util.regex.Pattern;
+
+import static searchengine.util.UrlUtil.getCleanedBaseUrl;
+import static searchengine.util.UrlUtil.isFile;
 
 
 @Slf4j
@@ -29,16 +31,7 @@ public class PageCrawler extends RecursiveAction {
     private static final int MIN_DELAY_MS = 100;
     private static final int MAX_DELAY_MS = 150;
 
-    private static final Set<String> SKIPPED_FILE_EXTENSIONS = Set.of(
-            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf",
-            ".eps", ".xlsx", ".doc", ".pptx", ".docx"
-    );
-
     private static final Pattern SKIP_PATTERNS = Pattern.compile("\\?_ga|#");
-
-    private static final String[] URL_PREFIXES = {
-            "http://www.", "https://www.", "http://", "https://", "www."
-    };
 
     private final String url;
     private final String userAgent;
@@ -164,33 +157,17 @@ public class PageCrawler extends RecursiveAction {
         }
     }
 
-
     private boolean isValidLink() {
         return isLink(url) && !isFile(url);
     }
 
     private boolean isLink(String link) {
-        String cleanedBaseUrl = getCleanedBaseUrl();
+        String cleanedBaseUrl = getCleanedBaseUrl(link);
         return link.contains(cleanedBaseUrl) && !containsSkipPatterns(link);
     }
 
     private boolean containsSkipPatterns(String link) {
         return SKIP_PATTERNS.matcher(link).find();
-    }
-
-    private String getCleanedBaseUrl() {
-        for (String prefix : URL_PREFIXES) {
-            if (url.startsWith(prefix)) {
-                return url.substring(prefix.length());
-            }
-        }
-        return url;
-    }
-
-    private boolean isFile(String link) {
-        String lowerCaseLink = link.toLowerCase();
-        return SKIPPED_FILE_EXTENSIONS.stream()
-                .anyMatch(lowerCaseLink::endsWith);
     }
 
     private boolean isValidStatusCode(Connection.Response response) {

@@ -1,5 +1,6 @@
 package searchengine.services.impl;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,14 +28,15 @@ public class LemmaServiceImpl implements LemmaService {
 
     private LemmaFinder lemmaFinder;
 
-
-    {
+    @PostConstruct
+    public void init() {
         try {
             lemmaFinder = LemmaFinder.getInstance();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Failed to initialize LemmaFinder", e);
         }
     }
+
 
     @Override
     public void saveAllLemmas(Page page) {

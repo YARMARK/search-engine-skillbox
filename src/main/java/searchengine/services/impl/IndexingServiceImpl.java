@@ -59,7 +59,6 @@ public class IndexingServiceImpl implements IndexingService {
 
     private static final String INDEXING_IS_NOT_STARTED = "Индексация не запущена";
 
-
     @Override
     public IndexingResponse startIndexing() {
         if (isIndexingRunning()) {
@@ -112,10 +111,8 @@ public class IndexingServiceImpl implements IndexingService {
 
             if (allTasksCompleted) {
                 log.info("All indexing tasks completed successfully.");
-//            notifyClients("Indexing completed");
             } else {
                 log.warn("Indexing finished with interruptions or errors.");
-//            notifyClients("Indexing was interrupted");
             }
         }, "Indexing-Waiter").start();
     }
@@ -212,52 +209,42 @@ public class IndexingServiceImpl implements IndexingService {
         return !byStatus.isEmpty();
     }
 
-    // TODO
     @Override
-    public IndexingResponse indexPage(String url) {
-        SiteInfo info = isPageFromSiteListConfig(url);
+    public Page indexPage(String pageUrl) {
+        SiteInfo info = isPageFromSiteListConfig(pageUrl);
+
         if (info == null) {
-            log.warn("URL does not match any configured site: {}", url);
-            String message = "Нет сайтов с заданным URL: " + url;
-            return new IndexingResponse(message);
+            log.warn("URL does not match any configured site: {}", pageUrl);
+            return null;
         }
-        log.info("Matched site: {}", info);
+
+        if (!isConnectionAvailable(pageUrl)) {
+            log.warn("Connection to URL is unavailable: {}", pageUrl);
+            return null;
+        }
+
+        log.info("Site is from config list and available: {}", info.getUrl());
 
         Site site = findOrCreateSite(info);
 
-        if (pageRepository.existsPageByPath(url)) {
-            log.info("Page already indexed, removing previous data: {}", url);
-            pageRepository.deletePageByPath(url);
+        if (pageRepository.existsPageByPath(pageUrl)) {
+            log.info("Page already indexed, removing previous data: {}", pageUrl);
+            pageRepository.deletePageByPath(pageUrl);
         }
 
-        // Парсим страницу и сохраняем
-        parseAndSavePage(url, site);
-        return new IndexingResponse();
+        return parseAndSavePage(pageUrl, site);
     }
 
-    @Override
-    public String getContentByUrl(String url) {
-        return "";
-    }
 
-    @Override
-    public Site getSiteByUrl(String url) {
-        return null;
-    }
-
-    @Override
-    public Long getPagesCount() {
-        return 0l;
-    }
-
-    @Override
-    public Long getSitesCount() {
-        return 0L;
-    }
-
-    @Override
-    public List<Site> getAllWebSites() {
-        return List.of();
+    // TODO HANDLE EXCEPTION
+    private boolean isConnectionAvailable(String url) {
+        int statusCode = 0;
+        try {
+            statusCode = Jsoup.connect(url).execute().statusCode();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return statusCode < 400;
     }
 
     private Site findOrCreateSite(SiteInfo info) {
@@ -270,12 +257,13 @@ public class IndexingServiceImpl implements IndexingService {
         return site;
     }
 
-    private void parseAndSavePage(String url, Site site) {
+    private Page parseAndSavePage(String url, Site site) {
+        Page page = null;
         try {
             Connection.Response response = Jsoup.connect(url).execute();
             Document document = response.parse();
 
-            Page page = new Page();
+            page = new Page();
             page.setCode(response.statusCode());
             page.setPath(url);
             page.setContent(document.html());
@@ -285,9 +273,7 @@ public class IndexingServiceImpl implements IndexingService {
             site.setStatusTime(LocalDateTime.now());
 
             siteRepository.save(site);
-            pageRepository.save(page);
-
-            log.info("Page parsed and saved: {}", url);
+            page = pageRepository.save(page);
 
         } catch (IOException e) {
             log.error("Failed to fetch or parse page: {}", url, e);
@@ -295,6 +281,8 @@ public class IndexingServiceImpl implements IndexingService {
             site.setStatusTime(LocalDateTime.now());
             siteRepository.save(site);
         }
+
+        return page;
     }
 
     private SiteInfo isPageFromSiteListConfig(String pageUrl) {
@@ -306,7 +294,6 @@ public class IndexingServiceImpl implements IndexingService {
                 URL siteUrl = new URL(site.getUrl());
                 String siteHost = siteUrl.getHost().replaceFirst("^www\\.", "");
 
-                // Сравниваем домены
                 if (pageHost.equalsIgnoreCase(siteHost)) {
                     return site;
                 }
@@ -317,5 +304,31 @@ public class IndexingServiceImpl implements IndexingService {
         }
 
         return null;
+    }
+
+    @Override
+    public String getContentByUrl(String url) {
+        Page page = pageRepository.findByPath(url);
+        return page != null ? page.getContent() : null;
+    }
+
+    @Override
+    public Long getPagesCount() {
+        return pageRepository.count();
+    }
+
+    @Override
+    public Long getSitesCount() {
+        return siteRepository.count();
+    }
+
+    @Override
+    public List<Site> getAllSites() {
+        return siteRepository.findAll();
+    }
+
+    @Override
+    public Long getPageCountBySit(Site site) {
+        return pageRepository.getCountBySite(site);
     }
 }

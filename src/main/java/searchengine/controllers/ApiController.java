@@ -1,10 +1,7 @@
 package searchengine.controllers;
 
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.configurationprocessor.json.JSONException;
-import org.springframework.boot.configurationprocessor.json.JSONObject;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,11 +11,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import searchengine.dto.response.IndexingResponse;
 import searchengine.dto.statistics.StatisticsResponse;
+import searchengine.model.Page;
 import searchengine.services.IndexingService;
+import searchengine.services.LemmaService;
 import searchengine.services.StatisticsService;
 import searchengine.util.PatternValidationUtil;
-
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @RestController
 @RequiredArgsConstructor
@@ -29,6 +26,8 @@ public class ApiController {
     private final StatisticsService statisticsService;
 
     private final IndexingService indexingService;
+
+    private final LemmaService lemmaService;
 
     @GetMapping("/statistics")
     public ResponseEntity<StatisticsResponse> statistics() {
@@ -50,9 +49,15 @@ public class ApiController {
         if (!PatternValidationUtil.isValidUrl(url)) {
             return ResponseEntity.badRequest().body(new IndexingResponse("Неверный URL, введите корректный URL"));
         }
-       indexingService.indexPage(url);
+        Page page = indexingService.indexPage(url);
 
-//        return new ResponseEntity<>(response.toString(), HttpStatus.OK);
-        return null;
+        if (page == null) {
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body(new IndexingResponse("Страница не найдена или не была проиндексирована"));
+        }
+
+        lemmaService.saveAllLemmas(page);
+        return ResponseEntity.ok().body(new IndexingResponse());
     }
 }

@@ -2,64 +2,80 @@ package searchengine.services.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import searchengine.config.SiteInfo;
-import searchengine.config.SitesList;
+import org.springframework.transaction.annotation.Transactional;
 import searchengine.dto.statistics.DetailedStatisticsItem;
 import searchengine.dto.statistics.StatisticsData;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
+import searchengine.model.Site;
+import searchengine.model.SiteStatus;
+import searchengine.repository.LemmaRepository;
+import searchengine.repository.PageRepository;
+import searchengine.repository.SiteRepository;
 import searchengine.services.StatisticsService;
 
-import java.util.ArrayList;
+import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Random;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class StatisticsServiceImpl implements StatisticsService {
 
-    private final Random random = new Random();
-    private final SitesList sites;
+    private final SiteRepository siteRepository;
+    private final PageRepository pageRepository;
+    private final LemmaRepository lemmaRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public StatisticsResponse getStatistics() {
-        String[] statuses = { "INDEXED", "FAILED", "INDEXING" };
-        String[] errors = {
-                "Ошибка индексации: главная страница сайта не доступна",
-                "Ошибка индексации: сайт не доступен",
-                ""
-        };
+        List<Site> sites = siteRepository.findAll();
 
-        TotalStatistics total = new TotalStatistics();
-        total.setSites(sites.getSites().size());
-        total.setIndexing(true);
+        TotalStatistics total = buildTotalStatistics(sites);
+        List<DetailedStatisticsItem> detailed = buildDetailedStatistics(sites);
 
-        List<DetailedStatisticsItem> detailed = new ArrayList<>();
-        List<SiteInfo> sitesList = sites.getSites();
-        for(int i = 0; i < sitesList.size(); i++) {
-            SiteInfo siteInfo = sitesList.get(i);
-            DetailedStatisticsItem item = new DetailedStatisticsItem();
-            item.setName(siteInfo.getName());
-            item.setUrl(siteInfo.getUrl());
-            int pages = random.nextInt(1_000);
-            int lemmas = pages * random.nextInt(1_000);
-            item.setPages(pages);
-            item.setLemmas(lemmas);
-            item.setStatus(statuses[i % 3]);
-            item.setError(errors[i % 3]);
-            item.setStatusTime(System.currentTimeMillis() -
-                    (random.nextInt(10_000)));
-            total.setPages(total.getPages() + pages);
-            total.setLemmas(total.getLemmas() + lemmas);
-            detailed.add(item);
-        }
-
-        StatisticsResponse response = new StatisticsResponse();
         StatisticsData data = new StatisticsData();
         data.setTotal(total);
         data.setDetailed(detailed);
+
+        StatisticsResponse response = new StatisticsResponse();
         response.setStatistics(data);
         response.setResult(true);
+
         return response;
+    }
+
+    private TotalStatistics buildTotalStatistics(List<Site> sites) {
+        int totalSites = sites.size();
+        int totalPages = (int) pageRepository.count();
+        int totalLemmas = Optional.ofNullable(lemmaRepository.countAllLemmas()).orElse(0);
+        boolean isIndexing = sites.stream().anyMatch(site -> site.getStatus() == SiteStatus.INDEXING);
+
+        TotalStatistics total = new TotalStatistics();
+        total.setSites(totalSites);
+        total.setPages(totalPages);
+        total.setLemmas(totalLemmas);
+        total.setIndexing(isIndexing);
+
+        return total;
+    }
+
+    private List<DetailedStatisticsItem> buildDetailedStatistics(List<Site> sites) {
+        return sites.stream()
+                .map(site -> {
+                    DetailedStatisticsItem item = new DetailedStatisticsItem();
+                    item.setName(site.getName());
+                    item.setUrl(site.getUrl());
+                    item.setPages(pageRepository.countBySite(site));
+                    item.setLemmas(Optional.ofNullable(lemmaRepository.countLemmasByWebSite(site)).orElse(0));
+                    item.setStatus(site.getStatus().name());
+                    item.setStatusTime(site.getStatusTime().toEpochSecond(ZoneOffset.UTC));
+                    if (site.getLastError() != null && !site.getLastError().isBlank()) {
+                        item.setError(site.getLastError());
+                    }
+                    return item;
+                })
+                .collect(Collectors.toList());
     }
 }

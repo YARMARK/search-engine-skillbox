@@ -10,15 +10,18 @@ import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
+import searchengine.services.LemmaService;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.RecursiveAction;
 import java.util.regex.Pattern;
+
+import static searchengine.util.UrlUtil.getCleanedBaseUrl;
+import static searchengine.util.UrlUtil.isFile;
 
 
 @Slf4j
@@ -28,19 +31,7 @@ public class PageCrawler extends RecursiveAction {
     private static final int MIN_DELAY_MS = 100;
     private static final int MAX_DELAY_MS = 150;
 
-    // File extensions that should be skipped
-    private static final Set<String> SKIPPED_FILE_EXTENSIONS = Set.of(
-            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf",
-            ".eps", ".xlsx", ".doc", ".pptx", ".docx"
-    );
-
-    // URL patterns to skip
     private static final Pattern SKIP_PATTERNS = Pattern.compile("\\?_ga|#");
-
-    // URL prefix patterns for cleaning
-    private static final String[] URL_PREFIXES = {
-            "http://www.", "https://www.", "http://", "https://", "www."
-    };
 
     private final String url;
     private final String userAgent;
@@ -48,11 +39,12 @@ public class PageCrawler extends RecursiveAction {
     private final Site site;
     private final PageRepository pageRepository;
     private final SiteRepository siteRepository;
-    private final Set<String> visitedLinks;
+    private final LemmaService lemmaService;
+    private final CopyOnWriteArraySet<String> visitedLinks;
 
     public PageCrawler(String url, String userAgent, String referrer, Site site,
-                       PageRepository pageRepository, SiteRepository siteRepository) {
-        this(url, userAgent, referrer, site, pageRepository, siteRepository, new CopyOnWriteArraySet<>());
+                       PageRepository pageRepository, SiteRepository siteRepository, LemmaService lemmaService) {
+        this(url, userAgent, referrer, site, pageRepository, siteRepository, lemmaService, new CopyOnWriteArraySet<>());
     }
 
     @Override
@@ -81,15 +73,19 @@ public class PageCrawler extends RecursiveAction {
         Thread.sleep(generateRandomDelay());
 
         Connection.Response response = fetchPage();
+
         if (isInterrupted()) {
             handleInterruption("after getting connection response");
             return;
         }
 
         Document document = response.parse();
-
-        if (shouldProcessPage()) {
+        if (isValidLink() && isValidStatusCode(response)) {
             savePage(response, document);
+        }
+
+        if (response.statusCode() >= 400 && response.statusCode() < 600) {
+            return;
         }
 
         processChildLinks(document);
@@ -110,6 +106,7 @@ public class PageCrawler extends RecursiveAction {
 
         pageRepository.save(page);
         siteRepository.save(site);
+        lemmaService.saveAllLemmas(page);
     }
 
     private Page createPage(Connection.Response response, Document document) {
@@ -151,7 +148,7 @@ public class PageCrawler extends RecursiveAction {
     }
 
     private PageCrawler createChildTask(String nextUrl) {
-        return new PageCrawler(nextUrl, userAgent, referrer, site, pageRepository, siteRepository, visitedLinks);
+        return new PageCrawler(nextUrl, userAgent, referrer, site, pageRepository, siteRepository, lemmaService, visitedLinks);
     }
 
     private void waitForChildTasks(List<PageCrawler> childTasks) {
@@ -160,12 +157,12 @@ public class PageCrawler extends RecursiveAction {
         }
     }
 
-    private boolean shouldProcessPage() {
+    private boolean isValidLink() {
         return isLink(url) && !isFile(url);
     }
 
     private boolean isLink(String link) {
-        String cleanedBaseUrl = getCleanedBaseUrl();
+        String cleanedBaseUrl = getCleanedBaseUrl(link);
         return link.contains(cleanedBaseUrl) && !containsSkipPatterns(link);
     }
 
@@ -173,20 +170,10 @@ public class PageCrawler extends RecursiveAction {
         return SKIP_PATTERNS.matcher(link).find();
     }
 
-    private String getCleanedBaseUrl() {
-        for (String prefix : URL_PREFIXES) {
-            if (url.startsWith(prefix)) {
-                return url.substring(prefix.length());
-            }
-        }
-        return url;
+    private boolean isValidStatusCode(Connection.Response response) {
+        return response.statusCode() < 400;
     }
 
-    private boolean isFile(String link) {
-        String lowerCaseLink = link.toLowerCase();
-        return SKIPPED_FILE_EXTENSIONS.stream()
-                .anyMatch(lowerCaseLink::endsWith);
-    }
 
     private int generateRandomDelay() {
         return MIN_DELAY_MS + (int) (Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS));

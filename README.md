@@ -8,6 +8,8 @@
 - exceptionHandler
 - добавить аудит
 - actuator
+- emitter
+- swagger
 
 SELECT path, COUNT(*) as count
 FROM page

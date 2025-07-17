@@ -20,12 +20,16 @@ import searchengine.repository.SiteRepository;
 import searchengine.services.IndexingService;
 import searchengine.task.PageCrawler;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -109,6 +113,7 @@ public class IndexingServiceImpl implements IndexingService {
                 }
             }
 
+            saveMap(lemmaService.getLemmaForms(), "lemma/lemma-forms.txt");
             if (allTasksCompleted) {
                 log.info("All indexing tasks completed successfully.");
             } else {
@@ -175,6 +180,16 @@ public class IndexingServiceImpl implements IndexingService {
         site.setLastError(error);
         site.setStatusTime(LocalDateTime.now());
         siteRepository.save(site);
+    }
+
+    public void saveMap(Map<String, Set<String>> map, String fileName) {
+        try (FileOutputStream fileOut = new FileOutputStream(fileName);
+             ObjectOutputStream out = new ObjectOutputStream(fileOut)) {
+             out.writeObject(map);
+             log.info("Lemma forms are written to file");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override

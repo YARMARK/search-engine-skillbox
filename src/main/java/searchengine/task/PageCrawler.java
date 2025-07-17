@@ -144,7 +144,7 @@ public class PageCrawler extends RecursiveAction {
         site.setStatusTime(LocalDateTime.now());
     }
 
-    private void processChildLinks(Document document) throws InterruptedException {
+    private void processChildLinks(Document document){
         List<PageCrawler> childTasks = new ArrayList<>();
 
         for (Element element : document.select("a[href]")) {

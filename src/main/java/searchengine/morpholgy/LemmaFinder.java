@@ -9,7 +9,10 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.safety.Safelist;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -34,7 +37,7 @@ public class LemmaFinder {
     private static final Pattern ENGLISH_PATTERN = Pattern.compile("[a-zA-Z]");
 
     @Getter
-    private final ConcurrentMap<String, Set<String>> lemmaFormsMap = new ConcurrentHashMap<>();
+    private ConcurrentMap<String, Set<String>> lemmaFormsMap;
 
     public static LemmaFinder getInstance() throws IOException {
         LuceneMorphology russianMorphology = new RussianLuceneMorphology();
@@ -45,10 +48,35 @@ public class LemmaFinder {
     private LemmaFinder(LuceneMorphology russianMorphology, LuceneMorphology englishMorphology) {
         this.russianMorphology = russianMorphology;
         this.englishMorphology = englishMorphology;
+        lemmaFormsMap = loadLemmaForms("lemma-forms.txt");
     }
 
     private LemmaFinder() {
         throw new RuntimeException("Constructor rejected");
+    }
+
+    @SuppressWarnings("unchecked")
+    public ConcurrentHashMap<String, Set<String>> loadLemmaForms(String fileName) {
+        ConcurrentHashMap<String, Set<String>> map = new ConcurrentHashMap<>();
+        File file = new File(fileName);
+        if (!file.exists() || file.length() == 0) {
+            // Файл не существует или пустой, возвращаем пустую карту
+            return map;
+        }
+        try (FileInputStream fileIn = new FileInputStream(fileName);
+             ObjectInputStream in = new ObjectInputStream(fileIn)) {
+            Object obj = in.readObject();
+            if (obj instanceof ConcurrentHashMap) {
+                map = (ConcurrentHashMap<String, Set<String>>) obj;
+            } else if (obj instanceof Map) {
+                map.putAll((Map<String, Set<String>>) obj);
+            } else {
+                throw new IOException("Unexpected data format");
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+        return map;
     }
 
     /**

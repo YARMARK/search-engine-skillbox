@@ -4,6 +4,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.Lemma;
 import searchengine.model.Page;
 import searchengine.model.SearchIndex;
@@ -14,8 +15,12 @@ import searchengine.repository.SearchIndexRepository;
 import searchengine.services.LemmaService;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,7 +29,7 @@ public class LemmaServiceImpl implements LemmaService {
 
     private final LemmaRepository lemmaRepository;
 
-    private final SearchIndexRepository indexRepository;
+    private final SearchIndexRepository searchIndexRepository;
 
     private LemmaFinder lemmaFinder;
 
@@ -37,43 +42,87 @@ public class LemmaServiceImpl implements LemmaService {
         }
     }
 
-
     @Override
+    @Transactional
     public void saveAllLemmas(Page page) {
-        List<Lemma> lemmas;
-        final int[] frequency = new int[1];
-        Map<String, Integer> map = lemmaFinder.collectLemmas(page.getContent());
-        for (Map.Entry<String, Integer> entry : map.entrySet()) {
-            lemmas = lemmaRepository.findALLByLemma(entry.getKey());
-            if (lemmas.size() > 0) {
-                lemmas.forEach(l -> {
-                    if (l != null && l.getSite().equals(page.getSite())) {
-                        frequency[0] = l.getFrequency();
-                        frequency[0]++;
-                        l.setFrequency(frequency[0]);
-                        lemmaRepository.save(l);
+        Map<String, Integer> lemmasWithCount = lemmaFinder.collectLemmas(page.getContent());
+        Site site = page.getSite();
 
-                    }
-                });
-            } else {
-                frequency[0] = 1;
-                lemmas.add(new Lemma());
-                lemmas.get(0).setLemma(entry.getKey());
-                lemmas.get(0).setFrequency(frequency[0]);
-                lemmas.get(0).setSite(page.getSite());
-                lemmaRepository.save(lemmas.get(0));
-            }
+        for (Map.Entry<String, Integer> entry : lemmasWithCount.entrySet()) {
+            String lemmaText = entry.getKey();
+            int count = entry.getValue();
 
+            // saveOrUpdateLemma инкрементирует frequency, если лемма уже есть
+            Lemma lemma = lemmaRepository.saveOrUpdateLemma(lemmaText, site);
+
+            // сохраняем индекс
             SearchIndex index = new SearchIndex();
-            index.setLemma(lemmas.get(0));
+            index.setLemma(lemma);
             index.setPage(page);
-            index.setRank(entry.getValue().floatValue());
-            indexRepository.save(index);
+            index.setRank((float) count);
+            searchIndexRepository.save(index);
         }
     }
 
     @Override
-    public List<Lemma> findAllBySite(Site site) {
-        return lemmaRepository.findAllBySite(site);
+    public List<SearchIndex> findAllIndicesByWebPage(Page page) {
+        return searchIndexRepository.findByPage(page);
+    }
+
+    @Override
+    public Map<String, Integer> collectLemmas(String text) {
+        return lemmaFinder.collectLemmas(text);
+    }
+
+    @Override
+    public ConcurrentMap<String, Set<String>> getLemmaForms() {
+        return lemmaFinder.getLemmaFormsMap();
+    }
+
+    @Override
+    public int getLemmaFrequency(String lemma) {
+        return lemmaRepository.findAllByLemma(lemma).size();
+    }
+
+    @Override
+    public Lemma findByLemmaAndSite(String s, Site site) {
+        return lemmaRepository.findByLemmaAndSite(s, site);
+    }
+
+    @Override
+    public List<Lemma> findAllLemmasByLemma(String s) {
+        return lemmaRepository.findAllByLemma(s);
+    }
+
+    @Override
+    public List<Page> findAllPagesByLemmaAndSite(String lemmaText, Site site) {
+        Lemma lemma = lemmaRepository.findByLemmaAndSite(lemmaText, site);
+        if (lemma == null) {
+            log.warn("Lemma not found: '{}' for site: {}", lemmaText, site.getUrl());
+            return Collections.emptyList();
+        }
+
+        List<SearchIndex> indices = searchIndexRepository.findAllByLemma(lemma);
+        if (indices.isEmpty()) {
+            log.warn("No indices found for lemma: '{}' on site: {}", lemmaText, site.getUrl());
+            return Collections.emptyList();
+        }
+
+        return indices.stream()
+                .map(SearchIndex::getPage)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Page> findAllPagesByLemmas(List<Lemma> lemmas) {
+        if (lemmas == null || lemmas.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return searchIndexRepository.findAllByLemmas(lemmas).stream()
+                .map(SearchIndex::getPage)
+                .distinct()
+                .toList();
     }
 }

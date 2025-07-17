@@ -29,17 +29,25 @@ import static searchengine.util.UrlUtil.isFile;
 public class PageCrawler extends RecursiveAction {
 
     private static final int MIN_DELAY_MS = 100;
+
     private static final int MAX_DELAY_MS = 150;
 
     private static final Pattern SKIP_PATTERNS = Pattern.compile("\\?_ga|#");
 
-    private final String url;
+    private String url;
+
     private final String userAgent;
+
     private final String referrer;
+
     private final Site site;
+
     private final PageRepository pageRepository;
+
     private final SiteRepository siteRepository;
+
     private final LemmaService lemmaService;
+
     private final CopyOnWriteArraySet<String> visitedLinks;
 
     public PageCrawler(String url, String userAgent, String referrer, Site site,
@@ -54,6 +62,8 @@ public class PageCrawler extends RecursiveAction {
             return;
         }
 
+        checkUrlFormat(url);
+
         if (!visitedLinks.add(url)) {
             log.info("Link is already visited: {}", url);
             return;
@@ -66,6 +76,12 @@ public class PageCrawler extends RecursiveAction {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
             log.error("Error processing URL: {}", url, e);
+        }
+    }
+
+    private void checkUrlFormat(String url) {
+        if (!url.endsWith("/")) {
+            this.url = url + "/";
         }
     }
 
@@ -112,10 +128,16 @@ public class PageCrawler extends RecursiveAction {
     private Page createPage(Connection.Response response, Document document) {
         Page page = new Page();
         page.setCode(response.statusCode());
-        page.setPath(url);
+        page.setPath(getRelativeUrl(url));
         page.setContent(document.html());
         page.setSite(site);
         return page;
+    }
+
+    private String getRelativeUrl(String url) {
+        String baseUrl = site.getUrl();
+        url = "/" + url.substring(baseUrl.length());
+        return url;
     }
 
     private void updateSiteTimestamp() {

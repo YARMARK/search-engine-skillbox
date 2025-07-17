@@ -305,30 +305,4 @@ public class IndexingServiceImpl implements IndexingService {
 
         return null;
     }
-
-    @Override
-    public String getContentByUrl(String url) {
-        Page page = pageRepository.findByPath(url);
-        return page != null ? page.getContent() : null;
-    }
-
-    @Override
-    public Long getPagesCount() {
-        return pageRepository.count();
-    }
-
-    @Override
-    public Long getSitesCount() {
-        return siteRepository.count();
-    }
-
-    @Override
-    public List<Site> getAllSites() {
-        return siteRepository.findAll();
-    }
-
-    @Override
-    public Long getPageCountBySit(Site site) {
-        return pageRepository.getCountBySite(site);
-    }
 }

@@ -1,6 +1,8 @@
 package searchengine.repository;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.Page;
 import searchengine.model.Site;
@@ -8,12 +10,6 @@ import searchengine.model.Site;
 import java.util.List;
 
 public interface PageRepository extends JpaRepository<Page, Integer> {
-
-    @Transactional
-    void deleteBySiteUrl(String siteUrl);
-
-    @Transactional
-    void deleteBySite(Site site);
 
     @Transactional
     boolean existsPageByPath(String path);
@@ -25,11 +21,14 @@ public interface PageRepository extends JpaRepository<Page, Integer> {
     Page findByPath(String url);
 
     @Transactional(readOnly = true)
-    Long getCountBySite(Site site);
-
-    @Transactional(readOnly = true)
-    int countBySite(Site webSite);
+    int countBySite(Site site);
 
     @Transactional(readOnly = true)
     List<Page> findAllBySite(Site site);
+
+    @Query("SELECT p FROM Page p WHERE p.content LIKE %:query% AND p.site = :site")
+    List<Page> searchByQueryAndSite(String query, Site site, Pageable pageable);
+
+    @Query("SELECT p FROM Page p WHERE p.content LIKE %:query%")
+    List<Page> searchByQuery(String query, Pageable pageable);
 }

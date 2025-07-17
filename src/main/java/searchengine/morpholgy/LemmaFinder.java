@@ -1,38 +1,82 @@
 package searchengine.morpholgy;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.lucene.morphology.LuceneMorphology;
+import org.apache.lucene.morphology.english.EnglishLuceneMorphology;
 import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.safety.Safelist;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Pattern;
 
 @Slf4j
 public class LemmaFinder {
 
-    private final LuceneMorphology luceneMorphology;
-    private static final String WORD_TYPE_REGEX = "\\W\\w&&[^а-яА-Я\\s]";
+    private final LuceneMorphology russianMorphology;
+
+    private final LuceneMorphology englishMorphology;
+
     private static final String[] particlesNames = new String[]{"МЕЖД", "ПРЕДЛ", "СОЮЗ"};
 
+    private static final Pattern RUSSIAN_PATTERN = Pattern.compile("[а-яА-Я]");
+
+    private static final Pattern ENGLISH_PATTERN = Pattern.compile("[a-zA-Z]");
+
+    @Getter
+    private ConcurrentMap<String, Set<String>> lemmaFormsMap;
+
     public static LemmaFinder getInstance() throws IOException {
-        LuceneMorphology morphology = new RussianLuceneMorphology();
-        return new LemmaFinder(morphology);
+        LuceneMorphology russianMorphology = new RussianLuceneMorphology();
+        LuceneMorphology englishMorphology = new EnglishLuceneMorphology();
+        return new LemmaFinder(russianMorphology, englishMorphology);
     }
 
-    private LemmaFinder(LuceneMorphology luceneMorphology) {
-        this.luceneMorphology = luceneMorphology;
+    private LemmaFinder(LuceneMorphology russianMorphology, LuceneMorphology englishMorphology) {
+        this.russianMorphology = russianMorphology;
+        this.englishMorphology = englishMorphology;
+        lemmaFormsMap = loadLemmaForms("lemma-forms.txt");
     }
 
     private LemmaFinder() {
-        throw new RuntimeException("Disallow construct");
+        throw new RuntimeException("Constructor rejected");
+    }
+
+    @SuppressWarnings("unchecked")
+    public ConcurrentHashMap<String, Set<String>> loadLemmaForms(String fileName) {
+        ConcurrentHashMap<String, Set<String>> map = new ConcurrentHashMap<>();
+        File file = new File(fileName);
+        if (!file.exists() || file.length() == 0) {
+            // Файл не существует или пустой, возвращаем пустую карту
+            return map;
+        }
+        try (FileInputStream fileIn = new FileInputStream(fileName);
+             ObjectInputStream in = new ObjectInputStream(fileIn)) {
+            Object obj = in.readObject();
+            if (obj instanceof ConcurrentHashMap) {
+                map = (ConcurrentHashMap<String, Set<String>>) obj;
+            } else if (obj instanceof Map) {
+                map.putAll((Map<String, Set<String>>) obj);
+            } else {
+                throw new IOException("Unexpected data format");
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+        return map;
     }
 
     /**
@@ -47,30 +91,64 @@ public class LemmaFinder {
         HashMap<String, Integer> lemmas = new HashMap<>();
 
         for (String word : words) {
-            if (word.isBlank()) {
+            if (word.isBlank() || word.length() <= 2) {
                 continue;
             }
 
-            List<String> wordBaseForms = luceneMorphology.getMorphInfo(word);
-            if (anyWordBaseBelongToParticle(wordBaseForms)) {
+            if (isMixedLanguageWord(word)) {
+                log.warn("Word contains characters from different languages, skip: {}", word);
                 continue;
             }
 
-            List<String> normalForms = luceneMorphology.getNormalForms(word);
-            if (normalForms.isEmpty()) {
-                continue;
-            }
-
-            String normalWord = normalForms.get(0);
-
-            if (lemmas.containsKey(normalWord)) {
-                lemmas.put(normalWord, lemmas.get(normalWord) + 1);
-            } else {
-                lemmas.put(normalWord, 1);
+            if (RUSSIAN_PATTERN.matcher(word).find()) {
+                processWord(word, russianMorphology, lemmas);
+            } else if (ENGLISH_PATTERN.matcher(word).find()) {
+                processWord(word, englishMorphology, lemmas);
             }
         }
 
         return lemmas;
+    }
+
+    private String[] arrayContainsRussianWords(String text) {
+        text = cleanHtmlTag(text);
+        return text.toLowerCase(Locale.ROOT)
+                .replaceAll("([^а-яА-Яa-zA-Z\\s])", " ")
+                .trim()
+                .split("\\s+");
+    }
+
+    private boolean isMixedLanguageWord(String word) {
+        return RUSSIAN_PATTERN.matcher(word).find() && ENGLISH_PATTERN.matcher(word).find();
+    }
+
+    private void processWord(String word, LuceneMorphology morphology, HashMap<String, Integer> lemmas) {
+        List<String> wordBaseForms;
+        try {
+            wordBaseForms = morphology.getMorphInfo(word);
+        } catch (Exception e) {
+            log.warn("Failed to get morph info for word: {}", word, e);
+            return;
+        }
+
+        if (anyWordBaseBelongToParticle(wordBaseForms)) {
+            return;
+        }
+
+        List<String> normalForms = morphology.getNormalForms(word);
+        if (normalForms.isEmpty()) {
+            return;
+        }
+
+        String normalWord = normalForms.get(0);
+
+        // Пропуск лемм длиной 1 или 2 символа
+        if (normalWord.length() <= 2) {
+            return;
+        }
+
+        lemmas.put(normalWord, lemmas.getOrDefault(normalWord, 0) + 1);
+        lemmaFormsMap.computeIfAbsent(normalWord, k -> ConcurrentHashMap.newKeySet()).add(word);
     }
 
 
@@ -83,15 +161,36 @@ public class LemmaFinder {
         String[] textArray = arrayContainsRussianWords(text);
         Set<String> lemmaSet = new HashSet<>();
         for (String word : textArray) {
-            if (!word.isEmpty() && isCorrectWordForm(word)) {
-                List<String> wordBaseForms = luceneMorphology.getMorphInfo(word);
-                if (anyWordBaseBelongToParticle(wordBaseForms)) {
-                    continue;
-                }
-                lemmaSet.addAll(luceneMorphology.getNormalForms(word));
+            if (word.isBlank() || word.length() <= 2 || isMixedLanguageWord(word)) {
+                continue;
+            }
+
+            if (RUSSIAN_PATTERN.matcher(word).find()) {
+                addLemmas(word, russianMorphology, lemmaSet);
+            } else if (ENGLISH_PATTERN.matcher(word).find()) {
+                addLemmas(word, englishMorphology, lemmaSet);
             }
         }
         return lemmaSet;
+    }
+
+    private void addLemmas(String word, LuceneMorphology morphology, Set<String> lemmaSet) {
+        List<String> wordBaseForms;
+        try {
+            wordBaseForms = morphology.getMorphInfo(word);
+        } catch (Exception e) {
+            log.warn("Failed to get morph info for word: {}", word, e);
+            return;
+        }
+
+        if (!anyWordBaseBelongToParticle(wordBaseForms)) {
+            List<String> normalForms = morphology.getNormalForms(word);
+            for (String normalForm : normalForms) {
+                if (normalForm.length() > 2) {
+                    lemmaSet.add(normalForm);
+                }
+            }
+        }
     }
 
     private boolean anyWordBaseBelongToParticle(List<String> wordBaseForms) {
@@ -105,24 +204,6 @@ public class LemmaFinder {
             }
         }
         return false;
-    }
-
-    private String[] arrayContainsRussianWords(String text) {
-        text = cleanHtmlTag(text);
-        return text.toLowerCase(Locale.ROOT)
-                .replaceAll("([^а-я\\s])", " ")
-                .trim()
-                .split("\\s+");
-    }
-
-    private boolean isCorrectWordForm(String word) {
-        List<String> wordInfo = luceneMorphology.getMorphInfo(word);
-        for (String morphInfo : wordInfo) {
-            if (morphInfo.matches(WORD_TYPE_REGEX)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     public String cleanHtmlTag(String html) {

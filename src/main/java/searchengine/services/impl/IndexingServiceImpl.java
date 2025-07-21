@@ -152,6 +152,11 @@ public class IndexingServiceImpl implements IndexingService {
 
     private void deleteExistingData(String siteUrl) {
         Site site = siteRepository.findByUrl(siteUrl);
+        if (site == null) {
+            log.warn("Site not found for url: {}", siteUrl);
+            return;
+        }
+
         pageRepository.findAllBySite(site).forEach(p -> deletePage(p.getId()));
 
         List<Lemma> allByWebSite = lemmaRepository.findAllBySite(site);

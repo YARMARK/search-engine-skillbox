@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
@@ -52,16 +53,34 @@ public class LemmaServiceImpl implements LemmaService {
             String lemmaText = entry.getKey();
             int count = entry.getValue();
 
-            // saveOrUpdateLemma инкрементирует frequency, если лемма уже есть
-            Lemma lemma = lemmaRepository.saveOrUpdateLemma(lemmaText, site);
+            Lemma lemma = createOrUpdateLemma(lemmaText, site, count);
 
-            // сохраняем индекс
-            SearchIndex index = new SearchIndex();
-            index.setLemma(lemma);
-            index.setPage(page);
-            index.setRank((float) count);
-            searchIndexRepository.save(index);
+            creatIndex(lemma, page, count);
         }
+    }
+
+    private Lemma createOrUpdateLemma(String lemmaText, Site site, int count) {
+
+        Lemma lemma = lemmaRepository.findByLemmaAndSite(lemmaText, site)
+                .orElseGet(() -> {
+                    Lemma newLemma = new Lemma();
+                    newLemma.setLemma(lemmaText);
+                    newLemma.setSite(site);
+                    newLemma.setFrequency(0);
+                    return newLemma;
+                });
+
+        lemma.setFrequency(lemma.getFrequency() + count);
+        lemma = lemmaRepository.save(lemma);
+        return lemma;
+    }
+
+    private SearchIndex creatIndex(Lemma lemma, Page page, int count) {
+        SearchIndex index = new SearchIndex();
+        index.setLemma(lemma);
+        index.setPage(page);
+        index.setRank(count);
+        return searchIndexRepository.save(index);
     }
 
     @Override
@@ -85,24 +104,19 @@ public class LemmaServiceImpl implements LemmaService {
     }
 
     @Override
-    public Lemma findByLemmaAndSite(String s, Site site) {
-        return lemmaRepository.findByLemmaAndSite(s, site);
-    }
-
-    @Override
     public List<Lemma> findAllLemmasByLemma(String s) {
         return lemmaRepository.findAllByLemma(s);
     }
 
     @Override
     public List<Page> findAllPagesByLemmaAndSite(String lemmaText, Site site) {
-        Lemma lemma = lemmaRepository.findByLemmaAndSite(lemmaText, site);
-        if (lemma == null) {
+        Optional<Lemma> byLemmaAndSite = lemmaRepository.findByLemmaAndSite(lemmaText, site);
+        if (!byLemmaAndSite.isPresent()) {
             log.warn("Lemma not found: '{}' for site: {}", lemmaText, site.getUrl());
             return Collections.emptyList();
         }
 
-        List<SearchIndex> indices = searchIndexRepository.findAllByLemma(lemma);
+        List<SearchIndex> indices = searchIndexRepository.findAllByLemma(byLemmaAndSite.get());
         if (indices.isEmpty()) {
             log.warn("No indices found for lemma: '{}' on site: {}", lemmaText, site.getUrl());
             return Collections.emptyList();

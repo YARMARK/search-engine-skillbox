@@ -14,8 +14,6 @@ public interface LemmaService {
 
     void saveAllLemmas(Page page);
 
-    Lemma findByLemmaAndSite(String s, Site site);
-
     Map<String, Integer> collectLemmas(String text);
 
     ConcurrentMap<String, Set<String>> getLemmaForms();
@@ -29,5 +27,4 @@ public interface LemmaService {
     List<Page> findAllPagesByLemmaAndSite(String s, Site site);
 
     List<SearchIndex> findAllIndicesByWebPage(Page page);
-
 }

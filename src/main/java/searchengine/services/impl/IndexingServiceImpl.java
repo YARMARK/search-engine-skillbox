@@ -5,7 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import searchengine.config.SiteInfo;
 import searchengine.config.SitesList;
 import searchengine.dto.response.IndexingResponse;
@@ -62,6 +65,17 @@ public class IndexingServiceImpl implements IndexingService {
     private static final String INDEXING_IS_ALREADY_STARTED = "Индексация уже запущена";
 
     private static final String INDEXING_IS_NOT_STARTED = "Индексация не запущена";
+
+
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void markAllSitesWithIndexingStatusAsField(){
+        List<Site> sites = siteRepository.findByStatus(SiteStatus.INDEXING);
+        for (Site site : sites) {
+            site.setStatus(SiteStatus.FAILED);
+            siteRepository.save(site);
+        }
+    }
 
     @Override
     public IndexingResponse startIndexing() {

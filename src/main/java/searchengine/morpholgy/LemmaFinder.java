@@ -208,7 +208,7 @@ public class LemmaFinder {
     }
 
     public String cleanHtmlTag(String html) {
-        log.info("Clean HTML tag from: {}", html);
+        log.info("Clean HTML");
         Document doc = Jsoup.parse(html);
         return Jsoup.clean(doc.body().html(), Safelist.none());
     }

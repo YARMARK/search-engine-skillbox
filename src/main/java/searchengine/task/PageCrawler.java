@@ -62,7 +62,10 @@ public class PageCrawler extends RecursiveAction {
             return;
         }
 
-        checkUrlFormat(url);
+        if (!isDaughterPage()) {
+            log.info("Link is not from the site, url {}, \n site {}", url, site);
+            return;
+        }
 
         if (!visitedLinks.add(url)) {
             log.info("Link is already visited: {}", url);
@@ -79,10 +82,8 @@ public class PageCrawler extends RecursiveAction {
         }
     }
 
-    private void checkUrlFormat(String url) {
-        if (!url.endsWith("/")) {
-            this.url = url + "/";
-        }
+    private boolean isDaughterPage() {
+        return url.startsWith(site.getUrl());
     }
 
     private void processPage() throws InterruptedException, IOException {
@@ -136,7 +137,11 @@ public class PageCrawler extends RecursiveAction {
 
     private String getRelativeUrl(String url) {
         String baseUrl = site.getUrl();
-        url = "/" + url.substring(baseUrl.length());
+        url = url.substring(baseUrl.length()).trim();
+        if (url.startsWith("/") && !url.isEmpty()) {
+            return url;
+        }
+        url = "/" + url;
         return url;
     }
 

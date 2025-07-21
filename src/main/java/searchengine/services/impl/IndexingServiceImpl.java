@@ -167,11 +167,18 @@ public class IndexingServiceImpl implements IndexingService {
 
     private Site createAndSaveSite(SiteInfo info) {
         Site site = new Site();
-        site.setUrl(info.getUrl());
+        site.setUrl(checkUrlFormat(info.getUrl()));
         site.setName(info.getName());
         site.setStatus(SiteStatus.INDEXING);
         site.setStatusTime(LocalDateTime.now());
         return siteRepository.save(site);
+    }
+
+    private String checkUrlFormat(String url) {
+        if (!url.endsWith("/")) {
+            url = url + "/";
+        }
+        return url;
     }
 
     private void crawlSite(Site site, String userAgent, String referrer) {

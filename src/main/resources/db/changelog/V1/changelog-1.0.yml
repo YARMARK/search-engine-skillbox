@@ -88,7 +88,7 @@ databaseChangeLog:
             columns:
               - column:
                   name: id
-                  type: BIGINT
+                  type: INT
                   autoIncrement: true
                   constraints:
                     primaryKey: true
@@ -136,7 +136,7 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: lemma_id
-                  type: BIGINT
+                  type: INT
                   constraints:
                     nullable: false
               - column:

@@ -29,7 +29,7 @@ public class Lemma implements Serializable, Comparable<Lemma> {
     @Id
     @GeneratedValue(strategy = IDENTITY)
     @Column(name = "id", nullable = false)
-    private Long id;
+    private int id;
 
     @ManyToOne
     @JoinColumn(name = "site_id", nullable = false)

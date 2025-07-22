@@ -20,7 +20,6 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.RecursiveAction;
 import java.util.regex.Pattern;
 
-import static searchengine.util.UrlUtil.getCleanedBaseUrl;
 import static searchengine.util.UrlUtil.isFile;
 
 
@@ -87,6 +86,11 @@ public class PageCrawler extends RecursiveAction {
     }
 
     private void processPage() throws InterruptedException, IOException {
+        if (!isValidLink() || isFile(url)) {
+            log.debug("Skipping non-html or invalid link: {}", url);
+            return;
+        }
+
         Thread.sleep(generateRandomDelay());
 
         Connection.Response response = fetchPage();
@@ -96,14 +100,18 @@ public class PageCrawler extends RecursiveAction {
             return;
         }
 
-        Document document = response.parse();
-        if (isValidLink() && isValidStatusCode(response)) {
-            savePage(response, document);
-        }
-
-        if (response.statusCode() >= 400 && response.statusCode() < 600) {
+        String contentType = response.contentType();
+        if (contentType == null || !contentType.startsWith("text/")) {
+            log.debug("Skipping non-text content: {}", contentType);
             return;
         }
+
+        if (!isValidStatusCode(response)) {
+            return;
+        }
+
+        Document document = response.parse();
+        savePage(response, document);
 
         processChildLinks(document);
     }
@@ -137,12 +145,11 @@ public class PageCrawler extends RecursiveAction {
 
     private String getRelativeUrl(String url) {
         String baseUrl = site.getUrl();
-        url = url.substring(baseUrl.length()).trim();
-        if (url.startsWith("/") && !url.isEmpty()) {
-            return url;
+        if (url.startsWith(baseUrl)) {
+            url = url.substring(baseUrl.length());
         }
-        url = "/" + url;
-        return url;
+        if (url.isBlank()) return "/";
+        return url.startsWith("/") ? url : "/" + url;
     }
 
     private void updateSiteTimestamp() {
@@ -189,8 +196,7 @@ public class PageCrawler extends RecursiveAction {
     }
 
     private boolean isLink(String link) {
-        String cleanedBaseUrl = getCleanedBaseUrl(link);
-        return link.contains(cleanedBaseUrl) && !containsSkipPatterns(link);
+        return link.startsWith(site.getUrl()) && !containsSkipPatterns(link);
     }
 
     private boolean containsSkipPatterns(String link) {

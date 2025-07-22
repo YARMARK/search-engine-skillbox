@@ -156,39 +156,32 @@ public class IndexingServiceImpl implements IndexingService {
 
     }
 
-    private void deletePage(Integer pageId) {
-        Page webPage = pageRepository.findById(pageId)
-                .orElseThrow(() -> new RuntimeException("WebPage not found with id " + pageId));
-
-        indexRepository.deleteByPage(webPage);
-        pageRepository.delete(webPage);
-    }
-
     private void deleteExistingData(String siteUrl) {
+        siteUrl = modifyUrlToValid(siteUrl);
         Site site = siteRepository.findByUrl(siteUrl);
         if (site == null) {
             log.warn("Site not found for url: {}", siteUrl);
             return;
         }
 
-        pageRepository.findAllBySite(site).forEach(p -> deletePage(p.getId()));
-
-        List<Lemma> allByWebSite = lemmaRepository.findAllBySite(site);
-        lemmaRepository.deleteAll(allByWebSite);
-
+        indexRepository.deleteAllIndexesBySite(site);
+        pageRepository.deleteAllPagesBySite(site);
+        lemmaRepository.deleteAllLemmasBySite(site);
         siteRepository.delete(site);
+
+        log.info("Deleted site related info, url: {}", siteUrl);
     }
 
     private Site createAndSaveSite(SiteInfo info) {
         Site site = new Site();
-        site.setUrl(checkUrlFormat(info.getUrl()));
+        site.setUrl(modifyUrlToValid(info.getUrl()));
         site.setName(info.getName());
         site.setStatus(SiteStatus.INDEXING);
         site.setStatusTime(LocalDateTime.now());
         return siteRepository.save(site);
     }
 
-    private String checkUrlFormat(String url) {
+    private String modifyUrlToValid(String url) {
         if (!url.endsWith("/")) {
             url = url + "/";
         }

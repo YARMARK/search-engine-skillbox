@@ -53,29 +53,20 @@ public class LemmaServiceImpl implements LemmaService {
             String lemmaText = entry.getKey();
             int count = entry.getValue();
 
-            Lemma lemma = createOrUpdateLemma(lemmaText, site, count);
+            lemmaRepository.upsertLemma(lemmaText, site.getId(), count);
 
-            creatIndex(lemma, page, count);
+            Optional<Lemma> optionalLemma = lemmaRepository.findByLemmaAndSite(lemmaText, site);
+
+            if (!optionalLemma.isPresent()) {
+                log.error("Lemma '" + lemmaText + "' not found");
+                return;
+            }
+
+            createIndex(optionalLemma.get(), page, count);
         }
     }
 
-    private Lemma createOrUpdateLemma(String lemmaText, Site site, int count) {
-
-        Lemma lemma = lemmaRepository.findByLemmaAndSite(lemmaText, site)
-                .orElseGet(() -> {
-                    Lemma newLemma = new Lemma();
-                    newLemma.setLemma(lemmaText);
-                    newLemma.setSite(site);
-                    newLemma.setFrequency(0);
-                    return newLemma;
-                });
-
-        lemma.setFrequency(lemma.getFrequency() + count);
-        lemma = lemmaRepository.save(lemma);
-        return lemma;
-    }
-
-    private SearchIndex creatIndex(Lemma lemma, Page page, int count) {
+    private SearchIndex createIndex(Lemma lemma, Page page, int count) {
         SearchIndex index = new SearchIndex();
         index.setLemma(lemma);
         index.setPage(page);
@@ -125,7 +116,7 @@ public class LemmaServiceImpl implements LemmaService {
         return indices.stream()
                 .map(SearchIndex::getPage)
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override

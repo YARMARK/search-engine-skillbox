@@ -99,9 +99,25 @@ public class IndexingServiceImpl implements IndexingService {
         return new IndexingResponse();
     }
 
+    private List<SiteInfo> getUniqueSites() {
+        if (!sitesList.getSites().isEmpty()) {
+            return sitesList.getSites().stream()
+                    .distinct()
+                    .collect(Collectors.toMap(
+                            SiteInfo::getUrl,
+                            Function.identity(),
+                            (existing, duplicate) -> existing
+                    ))
+                    .values()
+                    .stream()
+                    .toList();
+        }
+        return Collections.emptyList();
+    }
+
     private void handleSiteIndexing(SiteInfo info) {
         try {
-            if (Thread.interrupted()) {  // Проверка прерывания потока
+            if (Thread.interrupted()) {
                 throw new InterruptedException();
             }
             processSite(info, sitesList.getReferrer(), sitesList.getUserAgent());

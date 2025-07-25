@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -49,33 +48,27 @@ public class LemmaServiceImpl implements LemmaService {
         Map<String, Integer> lemmasWithCount = lemmaFinder.collectLemmas(page.getContent());
         Site site = page.getSite();
 
-        for (Map.Entry<String, Integer> entry : lemmasWithCount.entrySet()) {
-            String lemmaText = entry.getKey();
-            int count = entry.getValue();
+        lemmasWithCount.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> {
+                    String lemmaText = entry.getKey();
+                    int count = entry.getValue();
 
-            lemmaRepository.upsertLemma(lemmaText, site.getId(), count);
+                    lemmaRepository.upsertLemma(lemmaText, site.getId(), count);
 
-            Optional<Lemma> optionalLemma = lemmaRepository.findByLemmaAndSite(lemmaText, site);
+                    Lemma lemma = lemmaRepository.findByLemmaAndSite(lemmaText, site)
+                            .orElseThrow(() -> new RuntimeException("Lemma not found after upsert: " + lemmaText));
 
-            if (!optionalLemma.isPresent()) {
-                log.error("Lemma '" + lemmaText + "' not found");
-                return;
-            }
-
-            createIndex(optionalLemma.get(), page, count);
-        }
-    }
-
-    private SearchIndex createIndex(Lemma lemma, Page page, int count) {
-        SearchIndex index = new SearchIndex();
-        index.setLemma(lemma);
-        index.setPage(page);
-        index.setRank(count);
-        return searchIndexRepository.save(index);
+                    SearchIndex index = new SearchIndex();
+                    index.setLemma(lemma);
+                    index.setPage(page);
+                    index.setRank(count);
+                    searchIndexRepository.save(index);
+                });
     }
 
     @Override
-    public List<SearchIndex> findAllIndicesByWebPage(Page page) {
+    public List<SearchIndex> findAllIndicesByPage(Page page) {
         return searchIndexRepository.findByPage(page);
     }
 

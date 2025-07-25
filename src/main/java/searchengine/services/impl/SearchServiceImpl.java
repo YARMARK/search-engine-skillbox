@@ -8,6 +8,7 @@ import org.jsoup.nodes.Element;
 import org.springframework.stereotype.Service;
 import searchengine.dto.serach.SearchDto;
 import searchengine.dto.serach.SearchResponse;
+import searchengine.facade.LemmaFacade;
 import searchengine.model.Page;
 import searchengine.model.SearchIndex;
 import searchengine.model.Site;
@@ -15,7 +16,6 @@ import searchengine.model.SiteStatus;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
 import searchengine.services.IndexingService;
-import searchengine.services.LemmaService;
 import searchengine.services.SearchService;
 
 import java.util.ArrayList;
@@ -36,12 +36,13 @@ public class SearchServiceImpl implements SearchService {
 
     private final IndexingService indexingService;
 
-    private final LemmaService lemmaService;
+    private final LemmaFacade lemmaFacade;
 
     private final SiteRepository siteRepository;
 
-    private final Set<String> queryLemmasFormsSet = new HashSet<>();
     private final PageRepository pageRepository;
+
+    private final Set<String> queryLemmasFormsSet = new HashSet<>();
 
     @Override
     public SearchResponse search(String query, String site, Integer offset, Integer limit) {
@@ -76,7 +77,7 @@ public class SearchServiceImpl implements SearchService {
 
         // Проходим по каждой лемме и добавляем все ее формы в querySet
         for (String lemma : lemmas) {
-            Set<String> forms = lemmaService.getLemmaForms().get(lemma.toLowerCase());
+            Set<String> forms = lemmaFacade.getLemmaForms().get(lemma.toLowerCase());
             if (forms != null) {
                 queryLemmasFormsSet.addAll(forms);
             }
@@ -88,7 +89,7 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private List<String> extractLemmas(String query) {
-        Map<String, Integer> lemmaMap = lemmaService.collectLemmas(query);
+        Map<String, Integer> lemmaMap = lemmaFacade.collectLemmas(query);
         return new ArrayList<>(lemmaMap.keySet());
     }
 
@@ -98,10 +99,10 @@ public class SearchServiceImpl implements SearchService {
 
         return lemmas.stream()
                 .filter(lemma -> {
-                    int frequency = lemmaService.getLemmaFrequency(lemma);
+                    int frequency = lemmaFacade.getLemmaFrequency(lemma);
                     return frequency < totalPages * threshold;
                 })
-                .sorted(Comparator.comparingInt(lemmaService::getLemmaFrequency))
+                .sorted(Comparator.comparingInt(lemmaFacade::getLemmaFrequency))
                 .collect(Collectors.toList());
     }
 
@@ -111,7 +112,7 @@ public class SearchServiceImpl implements SearchService {
         if (siteUrl == null) {
             log.info("Searching across all indexed sites");
             for (String lemma : lemmas) {
-                Set<Page> pagesWithLemma = new HashSet<>(lemmaService.findAllPagesByLemmas(lemmaService.findAllLemmasByLemma(lemma)));
+                Set<Page> pagesWithLemma = new HashSet<>(lemmaFacade.findAllPagesByLemmas(lemmaFacade.findAllLemmasByLemma(lemma)));
                 if (result.isEmpty()) {
                     result.addAll(pagesWithLemma);
                 } else {
@@ -126,7 +127,7 @@ public class SearchServiceImpl implements SearchService {
             Site indexedSite = siteRepository.findByUrl(siteUrl);
             if (indexedSite != null && indexedSite.getStatus() == SiteStatus.INDEXED) {
                 for (String lemma : lemmas) {
-                    Set<Page> pagesWithLemma = new HashSet<>(lemmaService.findAllPagesByLemmaAndSite(lemma, indexedSite));
+                    Set<Page> pagesWithLemma = new HashSet<>(lemmaFacade.findAllPagesByLemmaAndSite(lemma, indexedSite));
                     if (result.isEmpty()) {
                         result.addAll(pagesWithLemma);
                     } else {
@@ -299,7 +300,7 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private float calculateAbsoluteRelevance(Page pages, List<String> lemmas) {
-        List<SearchIndex> indices = lemmaService.findAllIndicesByWebPage(pages);
+        List<SearchIndex> indices = lemmaFacade.findAllIndicesByPage(pages);
         float sumOfRanks = 0.0f;
         for (SearchIndex index : indices) {
             if (lemmas.contains(index.getLemma().getLemma())) {

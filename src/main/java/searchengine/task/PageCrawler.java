@@ -6,11 +6,11 @@ import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import searchengine.facade.LemmaFacade;
 import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
-import searchengine.services.LemmaService;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -45,13 +45,13 @@ public class PageCrawler extends RecursiveAction {
 
     private final SiteRepository siteRepository;
 
-    private final LemmaService lemmaService;
+    private final LemmaFacade lemmaFacade;
 
     private final CopyOnWriteArraySet<String> visitedLinks;
 
     public PageCrawler(String url, String userAgent, String referrer, Site site,
-                       PageRepository pageRepository, SiteRepository siteRepository, LemmaService lemmaService) {
-        this(url, userAgent, referrer, site, pageRepository, siteRepository, lemmaService, new CopyOnWriteArraySet<>());
+                       PageRepository pageRepository, SiteRepository siteRepository, LemmaFacade lemmaFacade) {
+        this(url, userAgent, referrer, site, pageRepository, siteRepository, lemmaFacade, new CopyOnWriteArraySet<>());
     }
 
     @Override
@@ -131,7 +131,7 @@ public class PageCrawler extends RecursiveAction {
 
         pageRepository.save(page);
         siteRepository.save(site);
-        lemmaService.saveAllLemmas(page);
+        lemmaFacade.saveAllLemmas(page);
     }
 
     private Page createPage(Connection.Response response, Document document) {
@@ -182,7 +182,7 @@ public class PageCrawler extends RecursiveAction {
     }
 
     private PageCrawler createChildTask(String nextUrl) {
-        return new PageCrawler(nextUrl, userAgent, referrer, site, pageRepository, siteRepository, lemmaService, visitedLinks);
+        return new PageCrawler(nextUrl, userAgent, referrer, site, pageRepository, siteRepository, lemmaFacade, visitedLinks);
     }
 
     private void waitForChildTasks(List<PageCrawler> childTasks) {

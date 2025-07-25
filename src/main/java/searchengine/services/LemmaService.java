@@ -26,5 +26,5 @@ public interface LemmaService {
 
     List<Page> findAllPagesByLemmaAndSite(String s, Site site);
 
-    List<SearchIndex> findAllIndicesByWebPage(Page page);
+    List<SearchIndex> findAllIndicesByPage(Page page);
 }

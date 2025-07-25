@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import searchengine.config.SiteInfo;
 import searchengine.config.SitesList;
 import searchengine.dto.response.IndexingResponse;
-import searchengine.model.Lemma;
+import searchengine.facade.LemmaFacade;
 import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.model.SiteStatus;
@@ -33,10 +33,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -54,9 +52,9 @@ public class IndexingServiceImpl implements IndexingService {
 
     private final LemmaRepository lemmaRepository;
 
-    private final LemmaServiceImpl lemmaService;
+    private final LemmaFacade lemmaFacade;
 
-    private final List<ForkJoinPool> forkJoinPools = new ArrayList<>();
+    private final ForkJoinPool forkJoinPool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
 
     private final List<Thread> threads = new ArrayList<>();
 
@@ -69,7 +67,7 @@ public class IndexingServiceImpl implements IndexingService {
 
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
-    public void markAllSitesWithIndexingStatusAsField(){
+    public void markAllSitesWithIndexingStatusAsField() {
         List<Site> sites = siteRepository.findByStatus(SiteStatus.INDEXING);
         for (Site site : sites) {
             site.setStatus(SiteStatus.FAILED);
@@ -84,20 +82,26 @@ public class IndexingServiceImpl implements IndexingService {
             return new IndexingResponse(INDEXING_IS_ALREADY_STARTED);
         }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(sitesList.getSites().size());
-        List<Future<?>> futures = new ArrayList<>();
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
 
         for (SiteInfo info : sitesList.getSites()) {
-            Future<?> future = executorService.submit(() -> handleSiteIndexing(info));
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> handleSiteIndexing(info), forkJoinPool);
             futures.add(future);
         }
 
-        executorService.shutdown();
-
-        waitForCompletionAsync(futures);
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .thenRun(() -> {
+                    saveMap(lemmaFacade.getLemmaForms(), "lemma/lemma-forms.txt");
+                    log.info("All indexing tasks completed.");
+                })
+                .exceptionally(ex -> {
+                    log.error("Error during indexing", ex);
+                    return null;
+                });
 
         return new IndexingResponse();
     }
+
 
     private void handleSiteIndexing(SiteInfo info) {
         try {
@@ -114,28 +118,6 @@ public class IndexingServiceImpl implements IndexingService {
         }
     }
 
-    private void waitForCompletionAsync(List<Future<?>> futures) {
-        new Thread(() -> {
-            boolean allTasksCompleted = true;
-
-            for (Future<?> future : futures) {
-                try {
-                    future.get();
-                } catch (Exception e) {
-                    log.warn("Exception while waiting for task completion: {}", e.getMessage());
-                    allTasksCompleted = false;
-                }
-            }
-
-            saveMap(lemmaService.getLemmaForms(), "lemma/lemma-forms.txt");
-            if (allTasksCompleted) {
-                log.info("All indexing tasks completed successfully.");
-            } else {
-                log.warn("Indexing finished with interruptions or errors.");
-            }
-        }, "Indexing-Waiter").start();
-    }
-
     private void processSite(SiteInfo info, String referrer, String userAgent) throws InterruptedException {
         if (Thread.currentThread().isInterrupted()) {
             throw new InterruptedException();
@@ -146,7 +128,7 @@ public class IndexingServiceImpl implements IndexingService {
         log.info("Created new site: {}", info.getUrl());
 
         try {
-            crawlSite(site, userAgent, referrer);
+            forkJoinPool.invoke(new PageCrawler(site.getUrl(), userAgent, referrer, site, pageRepository, siteRepository, lemmaFacade));
             updateSiteStatus(site, SiteStatus.INDEXED, null);
         } catch (Exception e) {
             log.error("Error processing site: {}", info.getUrl(), e);
@@ -188,12 +170,6 @@ public class IndexingServiceImpl implements IndexingService {
         return url;
     }
 
-    private void crawlSite(Site site, String userAgent, String referrer) {
-        ForkJoinPool forkJoinPool = new ForkJoinPool();
-        forkJoinPools.add(forkJoinPool);
-        forkJoinPool.invoke(new PageCrawler(site.getUrl(), userAgent, referrer, site, pageRepository, siteRepository, lemmaService));
-    }
-
     private void updateSiteStatus(Site site, SiteStatus status, String error) {
         site.setStatus(status);
         site.setLastError(error);
@@ -204,10 +180,10 @@ public class IndexingServiceImpl implements IndexingService {
     public void saveMap(Map<String, Set<String>> map, String fileName) {
         try (FileOutputStream fileOut = new FileOutputStream(fileName);
              ObjectOutputStream out = new ObjectOutputStream(fileOut)) {
-             out.writeObject(map);
-             log.info("Lemma forms are written to file");
+            out.writeObject(map);
+            log.info("Lemma forms are written to file");
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error(e.getMessage(), e);
         }
     }
 
@@ -216,31 +192,33 @@ public class IndexingServiceImpl implements IndexingService {
         if (!isIndexingRunning()) {
             return new IndexingResponse(INDEXING_IS_NOT_STARTED);
         }
-        threads.forEach(Thread::interrupt);
-        threads.clear();
+        if (!forkJoinPool.isShutdown()) {
+            forkJoinPool.shutdownNow();  // Попытка прервать все задачи
 
-        forkJoinPools.forEach(pool -> {
-            pool.shutdownNow();
             try {
-                if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
-                    log.warn("ForkJoinPool wasn't terminate");
+                // Ждем максимум 60 секунд, чтобы пул корректно завершился
+                if (!forkJoinPool.awaitTermination(60, TimeUnit.SECONDS)) {
+                    log.warn("ForkJoinPool did not terminate within timeout");
                 }
-            } catch (Exception e) {
-                log.error("Error during forkJoinPool interrupt: {}", e.getMessage(), e);
+            } catch (InterruptedException e) {
+                log.error("Interrupted while waiting for ForkJoinPool termination", e);
+                Thread.currentThread().interrupt();
             }
-        });
-        forkJoinPools.clear();
+        }
 
         for (Site site : siteRepository.findByStatus(SiteStatus.INDEXING)) {
             updateSiteStatus(site, SiteStatus.FAILED, INDEXING_WAS_TERMINATED_BY_USER);
         }
+
+        log.info("Indexing stop by user");
         return new IndexingResponse();
     }
 
     @Override
     public boolean isIndexingRunning() {
-        List<Site> byStatus = siteRepository.findByStatus(SiteStatus.INDEXING);
-        return !byStatus.isEmpty();
+        boolean hasRunningSites = !siteRepository.findByStatus(SiteStatus.INDEXING).isEmpty();
+        boolean poolIsActive = !forkJoinPool.isShutdown() && !forkJoinPool.isTerminated();
+        return hasRunningSites && poolIsActive;
     }
 
     @Override
@@ -270,7 +248,6 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
 
-    // TODO HANDLE EXCEPTION
     private boolean isConnectionAvailable(String url) {
         int statusCode = 0;
         try {

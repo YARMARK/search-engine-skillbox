@@ -1,5 +1,6 @@
 package searchengine.controllers;
 
+import searchengine.facade.LemmaFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -14,7 +15,6 @@ import searchengine.dto.serach.SearchResponse;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.model.Page;
 import searchengine.services.IndexingService;
-import searchengine.services.LemmaService;
 import searchengine.services.SearchService;
 import searchengine.services.StatisticsService;
 import searchengine.util.PatternValidationUtil;
@@ -29,7 +29,7 @@ public class ApiController {
 
     private final IndexingService indexingService;
 
-    private final LemmaService lemmaService;
+    private final LemmaFacade lemmaFacade;
 
     private final SearchService searchService;
 
@@ -61,7 +61,7 @@ public class ApiController {
                     .body(new IndexingResponse("Страница не найдена или не была проиндексирована"));
         }
 
-        lemmaService.saveAllLemmas(page);
+        lemmaFacade.saveAllLemmas(page);
         return ResponseEntity.ok().body(new IndexingResponse());
     }
 

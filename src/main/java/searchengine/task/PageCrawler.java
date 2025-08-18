@@ -8,9 +8,10 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import searchengine.model.Page;
 import searchengine.model.Site;
-import searchengine.repository.PageRepository;
-import searchengine.repository.SiteRepository;
+import searchengine.morpholgy.LemmaIndexer;
 import searchengine.services.LemmaService;
+import searchengine.services.PageService;
+import searchengine.services.SiteService;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -41,17 +42,19 @@ public class PageCrawler extends RecursiveAction {
 
     private final Site site;
 
-    private final PageRepository pageRepository;
+    private final PageService pageService;
 
-    private final SiteRepository siteRepository;
+    private final SiteService siteRepository;
 
     private final LemmaService lemmaService;
+
+    private final LemmaIndexer lemmaIndexer;
 
     private final CopyOnWriteArraySet<String> visitedLinks;
 
     public PageCrawler(String url, String userAgent, String referrer, Site site,
-                       PageRepository pageRepository, SiteRepository siteRepository, LemmaService lemmaService) {
-        this(url, userAgent, referrer, site, pageRepository, siteRepository, lemmaService, new CopyOnWriteArraySet<>());
+                       PageService pageService, SiteService siteRepository, LemmaService lemmaService, LemmaIndexer lemmaIndexer) {
+        this(url, userAgent, referrer, site, pageService, siteRepository, lemmaService, lemmaIndexer, new CopyOnWriteArraySet<>());
     }
 
     @Override
@@ -129,9 +132,9 @@ public class PageCrawler extends RecursiveAction {
         Page page = createPage(response, document);
         updateSiteTimestamp();
 
-        pageRepository.save(page);
-        siteRepository.save(site);
-        lemmaService.saveAllLemmas(page);
+        pageService.savePage(page);
+        siteRepository.saveSite(site);
+        lemmaIndexer.saveAllLemmas(page);
     }
 
     private Page createPage(Connection.Response response, Document document) {
@@ -182,7 +185,7 @@ public class PageCrawler extends RecursiveAction {
     }
 
     private PageCrawler createChildTask(String nextUrl) {
-        return new PageCrawler(nextUrl, userAgent, referrer, site, pageRepository, siteRepository, lemmaService, visitedLinks);
+        return new PageCrawler(nextUrl, userAgent, referrer, site, pageService, siteRepository, lemmaService, lemmaIndexer, visitedLinks);
     }
 
     private void waitForChildTasks(List<PageCrawler> childTasks) {

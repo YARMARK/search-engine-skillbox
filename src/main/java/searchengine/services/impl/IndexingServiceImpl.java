@@ -12,15 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
 import searchengine.config.SiteInfo;
 import searchengine.config.SitesList;
 import searchengine.dto.response.IndexingResponse;
-import searchengine.model.Lemma;
 import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.model.SiteStatus;
-import searchengine.repository.LemmaRepository;
-import searchengine.repository.PageRepository;
-import searchengine.repository.SearchIndexRepository;
-import searchengine.repository.SiteRepository;
+import searchengine.morpholgy.LemmaIndexer;
 import searchengine.services.IndexingService;
+import searchengine.services.PageService;
+import searchengine.services.SearchIndexService;
+import searchengine.services.SiteService;
 import searchengine.task.PageCrawler;
 
 import java.io.FileOutputStream;
@@ -30,6 +29,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +38,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -46,19 +48,21 @@ public class IndexingServiceImpl implements IndexingService {
 
     private final SitesList sitesList;
 
-    private final SiteRepository siteRepository;
+    private final SiteService siteService;
 
-    private final PageRepository pageRepository;
+    private final PageService pageService;
 
-    private final SearchIndexRepository indexRepository;
-
-    private final LemmaRepository lemmaRepository;
+    private final SearchIndexService searchIndexService;
 
     private final LemmaServiceImpl lemmaService;
+
+    private final LemmaIndexer lemmaIndexer;
 
     private final List<ForkJoinPool> forkJoinPools = new ArrayList<>();
 
     private final List<Thread> threads = new ArrayList<>();
+
+    private ExecutorService siteExecutor;
 
     private static final String INDEXING_WAS_TERMINATED_BY_USER = "Индексация остановлена пользователем";
 
@@ -70,10 +74,10 @@ public class IndexingServiceImpl implements IndexingService {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void markAllSitesWithIndexingStatusAsField(){
-        List<Site> sites = siteRepository.findByStatus(SiteStatus.INDEXING);
+        List<Site> sites = siteService.findSiteByStatus(SiteStatus.INDEXING);
         for (Site site : sites) {
             site.setStatus(SiteStatus.FAILED);
-            siteRepository.save(site);
+            siteService.saveSite(site);
         }
     }
 
@@ -84,15 +88,18 @@ public class IndexingServiceImpl implements IndexingService {
             return new IndexingResponse(INDEXING_IS_ALREADY_STARTED);
         }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(sitesList.getSites().size());
+        List<SiteInfo> uniqueSites = getUniqueSites();
+
+        int maxConcurrentSites = Math.min(4, uniqueSites.size());
+        siteExecutor = Executors.newFixedThreadPool(maxConcurrentSites);
         List<Future<?>> futures = new ArrayList<>();
 
-        for (SiteInfo info : sitesList.getSites()) {
-            Future<?> future = executorService.submit(() -> handleSiteIndexing(info));
+        for (SiteInfo info : uniqueSites) {
+            Future<?> future = siteExecutor.submit(() -> handleSiteIndexing(info));
             futures.add(future);
         }
 
-        executorService.shutdown();
+        siteExecutor.shutdown();
 
         waitForCompletionAsync(futures);
 
@@ -174,16 +181,16 @@ public class IndexingServiceImpl implements IndexingService {
 
     private void deleteExistingData(String siteUrl) {
         siteUrl = modifyUrlToValid(siteUrl);
-        Site site = siteRepository.findByUrl(siteUrl);
+        Site site = siteService.findSiteByUrl(siteUrl);
         if (site == null) {
             log.warn("Site not found for url: {}", siteUrl);
             return;
         }
 
-        indexRepository.deleteAllIndexesBySite(site);
-        pageRepository.deleteAllPagesBySite(site);
-        lemmaRepository.deleteAllLemmasBySite(site);
-        siteRepository.delete(site);
+        searchIndexService.deleteAllIndexesBySite(site);
+        pageService.deleteAllPagesBySite(site);
+        lemmaService.deleteAllLemmasBySite(site);
+        siteService.deleteSite(site);
 
         log.info("Deleted site related info, url: {}", siteUrl);
     }
@@ -194,7 +201,7 @@ public class IndexingServiceImpl implements IndexingService {
         site.setName(info.getName());
         site.setStatus(SiteStatus.INDEXING);
         site.setStatusTime(LocalDateTime.now());
-        return siteRepository.save(site);
+        return siteService.saveSite(site);
     }
 
     private String modifyUrlToValid(String url) {
@@ -207,14 +214,14 @@ public class IndexingServiceImpl implements IndexingService {
     private void crawlSite(Site site, String userAgent, String referrer) {
         ForkJoinPool forkJoinPool = new ForkJoinPool();
         forkJoinPools.add(forkJoinPool);
-        forkJoinPool.invoke(new PageCrawler(site.getUrl(), userAgent, referrer, site, pageRepository, siteRepository, lemmaService));
+        forkJoinPool.invoke(new PageCrawler(site.getUrl(), userAgent, referrer, site, pageService, siteService, lemmaService, lemmaIndexer));
     }
 
     private void updateSiteStatus(Site site, SiteStatus status, String error) {
         site.setStatus(status);
         site.setLastError(error);
         site.setStatusTime(LocalDateTime.now());
-        siteRepository.save(site);
+        siteService.saveSite(site);
     }
 
     public void saveMap(Map<String, Set<String>> map, String fileName) {
@@ -235,6 +242,17 @@ public class IndexingServiceImpl implements IndexingService {
         threads.forEach(Thread::interrupt);
         threads.clear();
 
+        if (siteExecutor != null && !siteExecutor.isShutdown()) {
+            siteExecutor.shutdownNow();
+            try {
+                if (!siteExecutor.awaitTermination(60, TimeUnit.SECONDS)) {
+                    log.warn("SiteExecutor wasn't terminate");
+                }
+            } catch (Exception e) {
+                log.error("Error during siteExecutor interrupt: {}", e.getMessage(), e);
+            }
+        }
+
         forkJoinPools.forEach(pool -> {
             pool.shutdownNow();
             try {
@@ -247,7 +265,7 @@ public class IndexingServiceImpl implements IndexingService {
         });
         forkJoinPools.clear();
 
-        for (Site site : siteRepository.findByStatus(SiteStatus.INDEXING)) {
+        for (Site site : siteService.findSiteByStatus(SiteStatus.INDEXING)) {
             updateSiteStatus(site, SiteStatus.FAILED, INDEXING_WAS_TERMINATED_BY_USER);
         }
         return new IndexingResponse();
@@ -255,7 +273,7 @@ public class IndexingServiceImpl implements IndexingService {
 
     @Override
     public boolean isIndexingRunning() {
-        List<Site> byStatus = siteRepository.findByStatus(SiteStatus.INDEXING);
+        List<Site> byStatus = siteService.findSiteByStatus(SiteStatus.INDEXING);
         return !byStatus.isEmpty();
     }
 
@@ -277,9 +295,9 @@ public class IndexingServiceImpl implements IndexingService {
 
         Site site = findOrCreateSite(info);
 
-        if (pageRepository.existsPageByPath(pageUrl)) {
+        if (pageService.existsPageByPath(pageUrl)) {
             log.info("Page already indexed, removing previous data: {}", pageUrl);
-            pageRepository.deletePageByPath(pageUrl);
+            pageService.deletePageByPath(pageUrl);
         }
 
         return parseAndSavePage(pageUrl, site);
@@ -298,7 +316,7 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private Site findOrCreateSite(SiteInfo info) {
-        Site site = siteRepository.findByUrl(info.getUrl());
+        Site site = siteService.findSiteByUrl(info.getUrl());
 
         if (site == null) {
             site = createAndSaveSite(info);
@@ -322,14 +340,14 @@ public class IndexingServiceImpl implements IndexingService {
             site.setStatus(SiteStatus.INDEXED);
             site.setStatusTime(LocalDateTime.now());
 
-            siteRepository.save(site);
-            page = pageRepository.save(page);
+            siteService.saveSite(site);
+            page = pageService.savePage(page);
 
         } catch (IOException e) {
             log.error("Failed to fetch or parse page: {}", url, e);
             site.setStatus(SiteStatus.FAILED);
             site.setStatusTime(LocalDateTime.now());
-            siteRepository.save(site);
+            siteService.saveSite(site);
         }
 
         return page;

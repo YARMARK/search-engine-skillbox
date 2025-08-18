@@ -13,8 +13,8 @@ import searchengine.dto.response.IndexingResponse;
 import searchengine.dto.serach.SearchResponse;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.model.Page;
+import searchengine.morpholgy.LemmaIndexer;
 import searchengine.services.IndexingService;
-import searchengine.services.LemmaService;
 import searchengine.services.SearchService;
 import searchengine.services.StatisticsService;
 import searchengine.util.PatternValidationUtil;
@@ -29,7 +29,7 @@ public class ApiController {
 
     private final IndexingService indexingService;
 
-    private final LemmaService lemmaService;
+    private final LemmaIndexer lemmaIndexer;
 
     private final SearchService searchService;
 
@@ -61,7 +61,7 @@ public class ApiController {
                     .body(new IndexingResponse("Страница не найдена или не была проиндексирована"));
         }
 
-        lemmaService.saveAllLemmas(page);
+        lemmaIndexer.saveAllLemmas(page);
         return ResponseEntity.ok().body(new IndexingResponse());
     }
 

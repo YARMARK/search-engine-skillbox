@@ -12,16 +12,12 @@ import java.util.List;
 
 public interface PageRepository extends JpaRepository<Page, Integer> {
 
-    @Transactional
     boolean existsPageByPath(String path);
 
-    @Transactional
     void deletePageByPath(String url);
 
-    @Transactional
     Page findByPath(String url);
 
-    @Transactional(readOnly = true)
     int countBySite(Site site);
 
     @Transactional(readOnly = true)
@@ -33,7 +29,6 @@ public interface PageRepository extends JpaRepository<Page, Integer> {
     @Query("SELECT p FROM Page p WHERE p.content LIKE %:query%")
     List<Page> searchByQuery(String query, Pageable pageable);
 
-    @Transactional
     @Modifying
     @Query("DELETE FROM Page p WHERE p.site = :site")
     void deleteAllPagesBySite(Site site);

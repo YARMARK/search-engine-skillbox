@@ -1,18 +1,19 @@
 package searchengine.services;
 
 import searchengine.model.Lemma;
-import searchengine.model.Page;
-import searchengine.model.SearchIndex;
 import searchengine.model.Site;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
 public interface LemmaService {
 
-    void saveAllLemmas(Page page);
+//    void saveAllLemmas(Page page);
+
+    void upsertLemmasInBatch(String batch);
 
     Map<String, Integer> collectLemmas(String text);
 
@@ -20,11 +21,17 @@ public interface LemmaService {
 
     int getLemmaFrequency(String lemma);
 
-    List<Page> findAllPagesByLemmas(List<Lemma> lemmas);
-
     List<Lemma> findAllLemmasByLemma(String s);
 
-    List<Page> findAllPagesByLemmaAndSite(String s, Site site);
+    List<Lemma> findAllByLemmaInAndSite(List<String> lemmas, int siteId);
 
-    List<SearchIndex> findAllIndicesByWebPage(Page page);
+    List<Lemma> findAllByLemma(String lemma);
+
+    Optional<Lemma> findLemmaByLemmaAndSite(String lemma, Site site);
+
+    Integer countLemmasBySite(Site site);
+
+    Integer countAllLemmas();
+
+    void deleteAllLemmasBySite(Site site);
 }

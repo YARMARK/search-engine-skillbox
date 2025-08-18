@@ -3,7 +3,6 @@ package searchengine.services.impl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import searchengine.config.SiteInfo;
 import searchengine.config.SitesList;
 import searchengine.dto.statistics.DetailedStatisticsItem;
 import searchengine.dto.statistics.StatisticsData;
@@ -12,15 +11,14 @@ import searchengine.dto.statistics.TotalStatistics;
 import searchengine.model.Site;
 import searchengine.model.SiteStatus;
 import searchengine.repository.LemmaRepository;
-import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
+import searchengine.services.PageService;
 import searchengine.services.StatisticsService;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,7 +26,7 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     private final SiteRepository siteRepository;
 
-    private final PageRepository pageRepository;
+    private final PageService pageService;
 
     private final LemmaRepository lemmaRepository;
 
@@ -51,7 +49,7 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     private TotalStatistics buildTotalStatistics(List<Site> sites) {
         int totalSites = sitesList.getSites().size();
-        int totalPages = (int) pageRepository.count();
+        int totalPages = pageService.countAllPages();
         int totalLemmas = Optional.ofNullable(lemmaRepository.countAllLemmas()).orElse(0);
         boolean isIndexing = sites.stream().anyMatch(site -> site.getStatus() == SiteStatus.INDEXING);
 
@@ -76,8 +74,8 @@ public class StatisticsServiceImpl implements StatisticsService {
 
                     if (optionalSite.isPresent()) {
                         Site site = optionalSite.get();
-                        item.setPages(pageRepository.countBySite(site));
-                        item.setLemmas(Optional.ofNullable(lemmaRepository.countLemmasByWebSite(site)).orElse(0));
+                        item.setPages(pageService.countPageBySite(site));
+                        item.setLemmas(Optional.ofNullable(lemmaRepository.countLemmasBySite(site)).orElse(0));
                         item.setStatus(site.getStatus().name());
 
                         LocalDateTime statusTime = site.getStatusTime() != null

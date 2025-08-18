@@ -13,10 +13,12 @@ import searchengine.model.SearchIndex;
 import searchengine.model.Site;
 import searchengine.model.SiteStatus;
 import searchengine.repository.PageRepository;
-import searchengine.repository.SiteRepository;
 import searchengine.services.IndexingService;
 import searchengine.services.LemmaService;
+import searchengine.services.PageService;
+import searchengine.services.SearchIndexService;
 import searchengine.services.SearchService;
+import searchengine.services.SiteService;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,10 +40,13 @@ public class SearchServiceImpl implements SearchService {
 
     private final LemmaService lemmaService;
 
-    private final SiteRepository siteRepository;
+    private final SiteService siteService;
+
+    private final SearchIndexService searchIndexService;
 
     private final Set<String> queryLemmasFormsSet = new HashSet<>();
-    private final PageRepository pageRepository;
+
+    private final PageService pageService;
 
     @Override
     public SearchResponse search(String query, String site, Integer offset, Integer limit) {
@@ -51,7 +56,7 @@ public class SearchServiceImpl implements SearchService {
         if (site != null && !isSiteIndexed(site)) {
             return createErrorResponse("Cайт не найден или еще не проиндексирован");
         } else {
-            if (siteRepository.findAll().isEmpty() || siteRepository.findAll().stream().anyMatch(e -> !e.getStatus().equals(SiteStatus.INDEXED))) {
+            if (siteService.findAllSites().isEmpty() || siteService.findAllSites().stream().anyMatch(e -> !e.getStatus().equals(SiteStatus.INDEXED))) {
                 SearchResponse response = new SearchResponse();
                 response.setResult(false);
                 response.setError("Как минимум один из сайтов еще не проиндексирован");
@@ -94,7 +99,7 @@ public class SearchServiceImpl implements SearchService {
 
     private List<String> filterLemmas(List<String> lemmas) {
         final double threshold = 0.7; // Примерное значение, необходимо подстроить
-        int totalPages = (int) pageRepository.count();
+        int totalPages = pageService.countAllPages();
 
         return lemmas.stream()
                 .filter(lemma -> {
@@ -111,7 +116,7 @@ public class SearchServiceImpl implements SearchService {
         if (siteUrl == null) {
             log.info("Searching across all indexed sites");
             for (String lemma : lemmas) {
-                Set<Page> pagesWithLemma = new HashSet<>(lemmaService.findAllPagesByLemmas(lemmaService.findAllLemmasByLemma(lemma)));
+                Set<Page> pagesWithLemma = new HashSet<>(pageService.findAllPagesByLemmas(lemmaService.findAllLemmasByLemma(lemma)));
                 if (result.isEmpty()) {
                     result.addAll(pagesWithLemma);
                 } else {
@@ -123,10 +128,10 @@ public class SearchServiceImpl implements SearchService {
             }
         } else {
             log.info("Searching on site: {}", siteUrl);
-            Site indexedSite = siteRepository.findByUrl(siteUrl);
+            Site indexedSite = siteService.findSiteByUrl(siteUrl);
             if (indexedSite != null && indexedSite.getStatus() == SiteStatus.INDEXED) {
                 for (String lemma : lemmas) {
-                    Set<Page> pagesWithLemma = new HashSet<>(lemmaService.findAllPagesByLemmaAndSite(lemma, indexedSite));
+                    Set<Page> pagesWithLemma = new HashSet<>(pageService.findAllPagesByLemmaAndSite(lemma, indexedSite));
                     if (result.isEmpty()) {
                         result.addAll(pagesWithLemma);
                     } else {
@@ -176,7 +181,7 @@ public class SearchServiceImpl implements SearchService {
 
 
     private boolean isSiteIndexed(String siteUrl) {
-        Site site = siteRepository.findByUrl(siteUrl);
+        Site site = siteService.findSiteByUrl(siteUrl);
         return site != null && site.getStatus() == SiteStatus.INDEXED;
     }
 
@@ -299,7 +304,7 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private float calculateAbsoluteRelevance(Page pages, List<String> lemmas) {
-        List<SearchIndex> indices = lemmaService.findAllIndicesByWebPage(pages);
+        List<SearchIndex> indices = searchIndexService.findAllIndicesByPage(pages);
         float sumOfRanks = 0.0f;
         for (SearchIndex index : indices) {
             if (lemmas.contains(index.getLemma().getLemma())) {

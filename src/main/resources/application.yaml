@@ -11,10 +11,14 @@ spring:
   jpa:
     hibernate:
       ddl-auto: none
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
+        order_inserts: true
+        order_updates: true
+        jdbc:
+          batch_size: 50
     open-in-view: true
 
   liquibase:
@@ -22,11 +26,11 @@ spring:
 
 indexing-settings:
   sites:
-    - url: https://www.lenta.ru
-      name: Лента.ру
-    - url: https://www.playback.ru
+#    - url: https://www.lenta.ru/
+#      name: Лента.ру
+    - url: https://www.playback.ru/
       name: PlayBack.Ru
     - url: https://volochek.life/
       name: Volochek.life
-  referrer: https://www.google.com
+  referrer: https://www.google.com/
   user-agent: MarikSearchBot

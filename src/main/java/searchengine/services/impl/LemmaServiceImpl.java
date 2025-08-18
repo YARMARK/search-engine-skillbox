@@ -6,22 +6,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.Lemma;
-import searchengine.model.Page;
-import searchengine.model.SearchIndex;
 import searchengine.model.Site;
 import searchengine.morpholgy.LemmaFinder;
 import searchengine.repository.LemmaRepository;
-import searchengine.repository.SearchIndexRepository;
 import searchengine.services.LemmaService;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,8 +24,6 @@ import java.util.stream.Collectors;
 public class LemmaServiceImpl implements LemmaService {
 
     private final LemmaRepository lemmaRepository;
-
-    private final SearchIndexRepository searchIndexRepository;
 
     private LemmaFinder lemmaFinder;
 
@@ -45,38 +38,8 @@ public class LemmaServiceImpl implements LemmaService {
 
     @Override
     @Transactional
-    public void saveAllLemmas(Page page) {
-        Map<String, Integer> lemmasWithCount = lemmaFinder.collectLemmas(page.getContent());
-        Site site = page.getSite();
-
-        for (Map.Entry<String, Integer> entry : lemmasWithCount.entrySet()) {
-            String lemmaText = entry.getKey();
-            int count = entry.getValue();
-
-            lemmaRepository.upsertLemma(lemmaText, site.getId(), count);
-
-            Optional<Lemma> optionalLemma = lemmaRepository.findByLemmaAndSite(lemmaText, site);
-
-            if (!optionalLemma.isPresent()) {
-                log.error("Lemma '" + lemmaText + "' not found");
-                return;
-            }
-
-            createIndex(optionalLemma.get(), page, count);
-        }
-    }
-
-    private SearchIndex createIndex(Lemma lemma, Page page, int count) {
-        SearchIndex index = new SearchIndex();
-        index.setLemma(lemma);
-        index.setPage(page);
-        index.setRank(count);
-        return searchIndexRepository.save(index);
-    }
-
-    @Override
-    public List<SearchIndex> findAllIndicesByWebPage(Page page) {
-        return searchIndexRepository.findByPage(page);
+    public void upsertLemmasInBatch(String batch) {
+        lemmaRepository.upsertLemma(batch);
     }
 
     @Override
@@ -90,44 +53,81 @@ public class LemmaServiceImpl implements LemmaService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public int getLemmaFrequency(String lemma) {
         return lemmaRepository.findAllByLemma(lemma).size();
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Lemma> findAllLemmasByLemma(String s) {
         return lemmaRepository.findAllByLemma(s);
     }
 
     @Override
-    public List<Page> findAllPagesByLemmaAndSite(String lemmaText, Site site) {
-        Optional<Lemma> byLemmaAndSite = lemmaRepository.findByLemmaAndSite(lemmaText, site);
-        if (!byLemmaAndSite.isPresent()) {
-            log.warn("Lemma not found: '{}' for site: {}", lemmaText, site.getUrl());
-            return Collections.emptyList();
-        }
-
-        List<SearchIndex> indices = searchIndexRepository.findAllByLemma(byLemmaAndSite.get());
-        if (indices.isEmpty()) {
-            log.warn("No indices found for lemma: '{}' on site: {}", lemmaText, site.getUrl());
-            return Collections.emptyList();
-        }
-
-        return indices.stream()
-                .map(SearchIndex::getPage)
-                .distinct()
-                .toList();
+    @Transactional(readOnly = true)
+    public  List<Lemma> findAllByLemmaInAndSite(List<String> lemmas, int siteId){
+        return lemmaRepository.findAllByLemmaInAndSite(lemmas, siteId);
     }
 
     @Override
-    public List<Page> findAllPagesByLemmas(List<Lemma> lemmas) {
-        if (lemmas == null || lemmas.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return searchIndexRepository.findAllByLemmas(lemmas).stream()
-                .map(SearchIndex::getPage)
-                .distinct()
-                .toList();
+    @Transactional(readOnly = true)
+    public Optional<Lemma> findLemmaByLemmaAndSite(String lemmaText, Site site){
+        return lemmaRepository.findByLemmaAndSite(lemmaText, site);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Integer countLemmasBySite(Site site){
+        return lemmaRepository.countLemmasBySite(site);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Integer countAllLemmas(){
+        return lemmaRepository.countAllLemmas();
+    }
+
+    @Override
+    @Transactional
+    public void deleteAllLemmasBySite(Site site){
+        lemmaRepository.deleteAllLemmasBySite(site);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Lemma> findAllByLemma(String lemma){
+        return lemmaRepository.findAllByLemma(lemma);
+    }
+
+//    @Override
+//    public void saveAllLemmas(Page page) {
+//        Map<String, Integer> lemmasWithCount = lemmaFinder.collectLemmas(page.getContent());
+//        Site site = page.getSite();
+//
+//        for (Map.Entry<String, Integer> entry : lemmasWithCount.entrySet()) {
+//            // TODO мб вынести вот это в одну транзацкию
+//            String lemmaText = entry.getKey();
+//            int count = entry.getValue();
+//
+//            lemmaRepository.upsertLemma(lemmaText, site.getId(), count);
+//
+//            Optional<Lemma> optionalLemma = lemmaRepository.findByLemmaAndSite(lemmaText, site);
+//
+//            if (!optionalLemma.isPresent()) {
+//                log.error("Lemma '" + lemmaText + "' not found");
+//                continue;
+//            }
+//
+//            createIndex(optionalLemma.get(), page, count);
+//        }
+//    }
+//
+//    public SearchIndex createIndex(Lemma lemma, Page page, int count) {
+//        SearchIndex index = new SearchIndex();
+//        index.setLemma(lemma);
+//        index.setPage(page);
+//        index.setRank(count);
+//        return searchIndexRepository.save(index);
+//    }
 }

@@ -1,4 +1,4 @@
-package searchengine.services.impl;
+package searchengine.services.persistency;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

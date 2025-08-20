@@ -1,4 +1,4 @@
-package searchengine.services.impl;
+package searchengine.services.indexing;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +12,6 @@ import searchengine.model.Page;
 import searchengine.model.SearchIndex;
 import searchengine.model.Site;
 import searchengine.model.SiteStatus;
-import searchengine.repository.PageRepository;
 import searchengine.services.IndexingService;
 import searchengine.services.LemmaService;
 import searchengine.services.PageService;

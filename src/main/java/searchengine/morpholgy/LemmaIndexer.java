@@ -2,17 +2,25 @@ package searchengine.morpholgy;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.DeadlockLoserDataAccessException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.Lemma;
 import searchengine.model.Page;
 import searchengine.model.SearchIndex;
 import searchengine.services.LemmaService;
 import searchengine.services.SearchIndexService;
+import searchengine.util.SiteScopedLockManager;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -23,7 +31,11 @@ public class LemmaIndexer {
 
     private final SearchIndexService searchIndexService;
 
+    private final SiteScopedLockManager siteScopedLockManager;
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void saveAllLemmas(Page page) {
+        log.info("Start saving lemmas from page pageId{}", page.getId());
         Map<String, Integer> lemmasWithCount = lemmasService.collectLemmas(page.getContent());
         int siteId = page.getSite().getId();
 
@@ -33,35 +45,40 @@ public class LemmaIndexer {
         }
 
         List<Map.Entry<String, Integer>> entries = new ArrayList<>(lemmasWithCount.entrySet());
+        entries.sort(Comparator.comparing(Map.Entry::getKey));
 
-        int batchSize = 30;
+        int batchSize = 20;
         int totalBatches = (int) Math.ceil((double) entries.size() / batchSize);
 
         for (int i = 0; i < entries.size(); i += batchSize) {
             List<Map.Entry<String, Integer>> batch = entries.subList(i, Math.min(i + batchSize, entries.size()));
-
-            saveBatch(batch, siteId);
-
-            log.info("{} from {} bathes are saved({} lemmas)",
-                    (i / batchSize) + 1, totalBatches, batch.size());
-
-            saveIndexes(batch, page);
+            try {
+                // Сериализуем запись по сайту, чтобы снизить шанс дедлоков между разными страницами одного сайта
+                siteScopedLockManager.executeWithLock(siteId, () -> processSingleBatch(batch, page));
+                log.info("{} from {} batches are saved({} lemmas)",
+                        (i / batchSize) + 1, totalBatches, batch.size());
+            } catch (Exception e) {
+                log.error("Failed to process batch after all retries. The entire transaction will be rolled back.", e);
+                throw e;
+            }
         }
 
         log.info("All batches are saved fro siteId={}", siteId);
 
     }
 
-    private void saveBatch(List<Map.Entry<String, Integer>> batch, int siteId) {
-        String values = batch.stream()
-                .map(entry -> "('" + entry.getKey().replace("'", "''") + "', "
-                              + entry.getValue() + ", " + siteId + ")")
-                .collect(Collectors.joining(","));
-
-        lemmasService.upsertLemmasInBatch(values);
+    @Retryable(
+            value = { CannotAcquireLockException.class, DeadlockLoserDataAccessException.class },
+            maxAttempts = 7,
+            backoff = @Backoff(delay = 500, maxDelay = 1500, random = true)
+    )
+    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
+    public void processSingleBatch(List<Map.Entry<String, Integer>> batch, Page page) {
+        lemmasService.upsertLemmasInBatch(batch, page.getSite().getId());
+        saveIndexes(batch, page);
     }
 
-    private void saveIndexes(List<Map.Entry<String, Integer>> batch, Page page){
+    private void saveIndexes(List<Map.Entry<String, Integer>> batch, Page page) {
         List<SearchIndex> indexes = createIndexes(batch, page);
         searchIndexService.saveAllIndexes(indexes);
     }

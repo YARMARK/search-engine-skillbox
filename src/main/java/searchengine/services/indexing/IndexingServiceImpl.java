@@ -1,4 +1,4 @@
-package searchengine.services.impl;
+package searchengine.services.indexing;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +20,7 @@ import searchengine.services.IndexingService;
 import searchengine.services.PageService;
 import searchengine.services.SearchIndexService;
 import searchengine.services.SiteService;
+import searchengine.services.persistency.LemmaServiceImpl;
 import searchengine.task.PageCrawler;
 
 import java.io.FileOutputStream;

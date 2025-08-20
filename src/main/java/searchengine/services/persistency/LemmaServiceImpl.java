@@ -1,9 +1,16 @@
-package searchengine.services.impl;
+package searchengine.services.persistency;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.LockAcquisitionException;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.DeadlockLoserDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.Lemma;
 import searchengine.model.Site;
@@ -27,6 +34,14 @@ public class LemmaServiceImpl implements LemmaService {
 
     private LemmaFinder lemmaFinder;
 
+    private final JdbcTemplate jdbcTemplate;
+
+    private String upserLemmaInBatch = """
+                INSERT INTO lemma (lemma, frequency, site_id)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE frequency = frequency + VALUES(frequency)
+            """;
+
     @PostConstruct
     public void init() {
         try {
@@ -38,8 +53,13 @@ public class LemmaServiceImpl implements LemmaService {
 
     @Override
     @Transactional
-    public void upsertLemmasInBatch(String batch) {
-        lemmaRepository.upsertLemma(batch);
+    public void upsertLemmasInBatch(List<Map.Entry<String, Integer>> batch, int siteId) {
+
+        jdbcTemplate.batchUpdate(upserLemmaInBatch, batch, batch.size(), (ps, entry) -> {
+            ps.setString(1, entry.getKey());   // lemma
+            ps.setInt(2, entry.getValue());    // frequency
+            ps.setInt(3, siteId);              // site_id
+        });
     }
 
     @Override
@@ -66,37 +86,37 @@ public class LemmaServiceImpl implements LemmaService {
 
     @Override
     @Transactional(readOnly = true)
-    public  List<Lemma> findAllByLemmaInAndSite(List<String> lemmas, int siteId){
+    public List<Lemma> findAllByLemmaInAndSite(List<String> lemmas, int siteId) {
         return lemmaRepository.findAllByLemmaInAndSite(lemmas, siteId);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Lemma> findLemmaByLemmaAndSite(String lemmaText, Site site){
+    public Optional<Lemma> findLemmaByLemmaAndSite(String lemmaText, Site site) {
         return lemmaRepository.findByLemmaAndSite(lemmaText, site);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Integer countLemmasBySite(Site site){
+    public Integer countLemmasBySite(Site site) {
         return lemmaRepository.countLemmasBySite(site);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Integer countAllLemmas(){
+    public Integer countAllLemmas() {
         return lemmaRepository.countAllLemmas();
     }
 
     @Override
     @Transactional
-    public void deleteAllLemmasBySite(Site site){
+    public void deleteAllLemmasBySite(Site site) {
         lemmaRepository.deleteAllLemmasBySite(site);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Lemma> findAllByLemma(String lemma){
+    public List<Lemma> findAllByLemma(String lemma) {
         return lemmaRepository.findAllByLemma(lemma);
     }
 

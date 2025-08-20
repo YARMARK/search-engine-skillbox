@@ -31,13 +31,13 @@ public interface LemmaRepository extends JpaRepository<Lemma, Integer> {
     @Query("SELECT COUNT (l.lemma) FROM Lemma l")
     Integer countAllLemmas();
 
-    @Modifying
-    @Query(value = """
-            INSERT INTO lemma (lemma, frequency, site_id)
-            VALUES :values
-            ON DUPLICATE KEY UPDATE frequency = frequency + VALUES(frequency)
-            """, nativeQuery = true)
-    void upsertLemma(@Param("values") String values);
+//    @Modifying
+//    @Query(value = """
+//            INSERT INTO lemma (lemma, frequency, site_id)
+//            VALUES :values
+//            ON DUPLICATE KEY UPDATE frequency = frequency + VALUES(frequency)
+//            """, nativeQuery = true)
+//    void upsertLemma(@Param("values") String values);
 
     @Modifying
     @Query("DELETE FROM Lemma l WHERE l.site = :site")

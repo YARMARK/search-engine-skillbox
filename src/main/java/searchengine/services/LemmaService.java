@@ -13,7 +13,9 @@ public interface LemmaService {
 
 //    void saveAllLemmas(Page page);
 
-    void upsertLemmasInBatch(String batch);
+//    void upsertLemmasInBatch(String batch);
+
+    void upsertLemmasInBatch(List<Map.Entry<String, Integer>> batch, int siteId);
 
     Map<String, Integer> collectLemmas(String text);
 

@@ -17,7 +17,8 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RecursiveAction;
 import java.util.regex.Pattern;
 
@@ -44,17 +45,17 @@ public class PageCrawler extends RecursiveAction {
 
     private final PageService pageService;
 
-    private final SiteService siteRepository;
+    private final SiteService siteService;
 
     private final LemmaService lemmaService;
 
     private final LemmaIndexer lemmaIndexer;
 
-    private final CopyOnWriteArraySet<String> visitedLinks;
+    private final Set<String> visitedLinks;
 
     public PageCrawler(String url, String userAgent, String referrer, Site site,
-                       PageService pageService, SiteService siteRepository, LemmaService lemmaService, LemmaIndexer lemmaIndexer) {
-        this(url, userAgent, referrer, site, pageService, siteRepository, lemmaService, lemmaIndexer, new CopyOnWriteArraySet<>());
+                       PageService pageService, SiteService siteService, LemmaService lemmaService, LemmaIndexer lemmaIndexer) {
+        this(url, userAgent, referrer, site, pageService, siteService, lemmaService, lemmaIndexer, ConcurrentHashMap.newKeySet());
     }
 
     @Override
@@ -133,7 +134,7 @@ public class PageCrawler extends RecursiveAction {
         updateSiteTimestamp();
 
         pageService.savePage(page);
-        siteRepository.saveSite(site);
+        siteService.saveSite(site);
         lemmaIndexer.saveAllLemmas(page);
     }
 
@@ -185,7 +186,7 @@ public class PageCrawler extends RecursiveAction {
     }
 
     private PageCrawler createChildTask(String nextUrl) {
-        return new PageCrawler(nextUrl, userAgent, referrer, site, pageService, siteRepository, lemmaService, lemmaIndexer, visitedLinks);
+        return new PageCrawler(nextUrl, userAgent, referrer, site, pageService, siteService, lemmaService, lemmaIndexer, visitedLinks);
     }
 
     private void waitForChildTasks(List<PageCrawler> childTasks) {

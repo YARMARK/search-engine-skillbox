@@ -11,18 +11,52 @@ import searchengine.model.Site;
 
 import java.util.List;
 
+/**
+ * Репозиторий для работы с сущностью {@link SearchIndex}.
+ *
+ * Предоставляет стандартные CRUD операции благодаря {@link JpaRepository},
+ * а также дополнительные методы для поиска и удаления индексов по страницам, леммам и сайтам.
+ */
 public interface SearchIndexRepository extends JpaRepository<SearchIndex, Integer> {
 
+    /**
+     * Удаляет все индексы, связанные с указанной страницей.
+     *
+     * @param page страница, индексы которой нужно удалить
+     */
     void deleteByPage(Page page);
 
+    /**
+     * Находит все индексы, связанные с указанной страницей.
+     *
+     * @param page страница
+     * @return список индексов
+     */
     List<SearchIndex> findByPage(Page page);
 
+    /**
+     * Находит все индексы, связанные с указанной леммой.
+     *
+     * @param lemma лемма
+     * @return список индексов
+     */
     @Query("SELECT i FROM index_table i WHERE i.lemma = :lemma")
     List<SearchIndex> findAllByLemma(@Param("lemma") Lemma lemma);
 
+    /**
+     * Находит все индексы, связанные с любыми из указанных лемм.
+     *
+     * @param lemmas список лемм
+     * @return список индексов
+     */
     @Query("SELECT i FROM index_table i WHERE i.lemma IN :lemmas")
     List<SearchIndex> findAllByLemmas(@Param("lemmas") List<Lemma> lemmas);
 
+    /**
+     * Удаляет все индексы, связанные со страницами указанного сайта.
+     *
+     * @param site сайт, индексы которого нужно удалить
+     */
     @Modifying
     @Query("DELETE FROM index_table i WHERE i.page.site = :site")
     void deleteAllIndexesBySite(@Param("site") Site site);

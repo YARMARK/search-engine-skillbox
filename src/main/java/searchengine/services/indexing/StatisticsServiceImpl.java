@@ -20,6 +20,13 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Сервис для формирования статистики по сайтам, страницам и леммам.
+ * <p>
+ * Предоставляет агрегированную информацию о всех сайтах, включая:
+ * общее количество сайтов, страниц и лемм, а также статус индексирования.
+ * Также формирует подробную статистику для каждого сайта.
+ */
 @Service
 @RequiredArgsConstructor
 public class StatisticsServiceImpl implements StatisticsService {
@@ -32,6 +39,11 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     private final SitesList sitesList;
 
+    /**
+     * Получает статистику по всем сайтам.
+     *
+     * @return объект {@link StatisticsResponse}, содержащий общее и подробное состояние сайтов
+     */
     @Override
     @Transactional(readOnly = true)
     public StatisticsResponse getStatistics() {
@@ -47,6 +59,13 @@ public class StatisticsServiceImpl implements StatisticsService {
         return response;
     }
 
+    /**
+     * Формирует общую статистику по всем сайтам.
+     *
+     * @param sites список сайтов из базы данных
+     * @return объект {@link TotalStatistics} с количеством сайтов, страниц, лемм
+     *         и флагом индексирования
+     */
     private TotalStatistics buildTotalStatistics(List<Site> sites) {
         int totalSites = sitesList.getSites().size();
         int totalPages = pageService.countAllPages();

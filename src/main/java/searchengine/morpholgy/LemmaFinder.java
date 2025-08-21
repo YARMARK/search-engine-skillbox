@@ -23,6 +23,17 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.regex.Pattern;
 
+/**
+ * Класс для извлечения и обработки лемм из текста на русском и английском языках.
+ * <p>
+ * Основные функции:
+ * <ul>
+ *     <li>Разделение текста на слова и фильтрация по языку.</li>
+ *     <li>Сбор лемм и подсчет их количества.</li>
+ *     <li>Очистка текста от HTML-тегов.</li>
+ *     <li>Хранение соответствия нормальных форм лемм и их вариантов в тексте.</li>
+ * </ul>
+ */
 @Slf4j
 public class LemmaFinder {
 
@@ -39,6 +50,12 @@ public class LemmaFinder {
     @Getter
     private ConcurrentMap<String, Set<String>> lemmaFormsMap;
 
+    /**
+     * Получение экземпляра Singleton LemmaFinder.
+     *
+     * @return экземпляр LemmaFinder
+     * @throws IOException при ошибках инициализации морфологий
+     */
     public static LemmaFinder getInstance() throws IOException {
         LuceneMorphology russianMorphology = new RussianLuceneMorphology();
         LuceneMorphology englishMorphology = new EnglishLuceneMorphology();
@@ -55,6 +72,12 @@ public class LemmaFinder {
         throw new RuntimeException("Constructor rejected");
     }
 
+    /**
+     * Загружает карту лемм и их вариантов из файла.
+     *
+     * @param fileName имя файла с сериализованной картой лемм
+     * @return карта, где ключ — лемма, значение — набор форм леммы
+     */
     @SuppressWarnings("unchecked")
     public ConcurrentHashMap<String, Set<String>> loadLemmaForms(String fileName) {
         ConcurrentHashMap<String, Set<String>> map = new ConcurrentHashMap<>();
@@ -80,7 +103,7 @@ public class LemmaFinder {
     }
 
     /**
-     * Метод разделяет текст на слова, находит все леммы и считает их количество.
+     * Разделяет текст на слова, находит все леммы и считает их количество.
      *
      * @param text текст из которого будут выбираться леммы
      * @return ключ является леммой, а значение количеством найденных лемм
@@ -154,6 +177,8 @@ public class LemmaFinder {
 
 
     /**
+     * Извлекает набор уникальных лемм из текста.
+     *
      * @param text текст из которого собираем все леммы
      * @return набор уникальных лемм найденных в тексте
      */
@@ -207,6 +232,12 @@ public class LemmaFinder {
         return false;
     }
 
+    /**
+     * Очищает текст от HTML-тегов.
+     *
+     * @param html исходный HTML-текст
+     * @return текст без HTML-тегов
+     */
     public String cleanHtmlTag(String html) {
         log.debug("Clean HTML");
         Document doc = Jsoup.parse(html);

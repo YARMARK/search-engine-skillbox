@@ -15,13 +15,24 @@ import searchengine.model.Page;
 import searchengine.model.SearchIndex;
 import searchengine.services.LemmaService;
 import searchengine.services.SearchIndexService;
-import searchengine.util.SiteScopedLockManager;
+import searchengine.manager.SiteScopedLockManager;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Компонент для индексирования лемм и сохранения поисковых индексов.
+ * <p>
+ * Этот класс отвечает за:
+ * <ul>
+ *     <li>Сбор лемм из текста страницы.</li>
+ *     <li>Сохранение лемм в базу данных партиями.</li>
+ *     <li>Создание и сохранение поисковых индексов (SearchIndex) для лемм.</li>
+ *     <li>Обеспечение сериализации операций для одного сайта, чтобы минимизировать вероятность дедлоков.</li>
+ * </ul>
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -33,6 +44,14 @@ public class LemmaIndexer {
 
     private final SiteScopedLockManager siteScopedLockManager;
 
+    /**
+     * Сохраняет все леммы из содержимого страницы в базе данных.
+     * <p>
+     * Леммы обрабатываются партиями по 20 элементов и сохраняются с учетом блокировки по сайту.
+     * Это позволяет избежать конфликтов между параллельными транзакциями для одной страницы.
+     *
+     * @param page страница, из которой собираются леммы
+     */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void saveAllLemmas(Page page) {
         log.info("Start saving lemmas from pageId={}", page.getId());
@@ -68,6 +87,15 @@ public class LemmaIndexer {
 
     }
 
+    /**
+     * Обрабатывает и сохраняет одну партию лемм в базе данных.
+     * <p>
+     * Метод выполняется в новой транзакции с уровнем изоляции READ_COMMITTED и
+     * использует механизм повторных попыток при ошибках блокировок или дедлоков.
+     *
+     * @param batch список пар <лемма, количество>
+     * @param page  страница, к которой относятся леммы
+     */
     @Retryable(
             value = {CannotAcquireLockException.class, DeadlockLoserDataAccessException.class},
             maxAttempts = 7,
@@ -79,11 +107,24 @@ public class LemmaIndexer {
         saveIndexes(batch, page);
     }
 
+    /**
+     * Создает и сохраняет поисковые индексы для заданной партии лемм.
+     *
+     * @param batch список пар <лемма, количество>
+     * @param page  страница, к которой относятся леммы
+     */
     private void saveIndexes(List<Map.Entry<String, Integer>> batch, Page page) {
         List<SearchIndex> indexes = createIndexes(batch, page);
         searchIndexService.saveAllIndexes(indexes);
     }
 
+    /**
+     * Создает поисковые индексы для заданной партии лемм и страницы.
+     *
+     * @param batch список пар <лемма, количество>
+     * @param page  страница, к которой относятся леммы
+     * @return список объектов SearchIndex
+     */
     private List<SearchIndex> createIndexes(List<Map.Entry<String, Integer>> batch, Page page) {
         log.debug("Creating search indexes for batch (pageId={}, siteId={}, size={})",
                 page.getId(), page.getSite().getId(), batch.size());
@@ -103,6 +144,14 @@ public class LemmaIndexer {
                 .toList();
     }
 
+    /**
+     * Создает объект поискового индекса для конкретной леммы и страницы.
+     *
+     * @param lemma лемма
+     * @param page  страница
+     * @param count количество вхождений леммы на странице
+     * @return объект SearchIndex
+     */
     public SearchIndex createIndex(Lemma lemma, Page page, int count) {
         SearchIndex index = new SearchIndex();
         index.setLemma(lemma);

@@ -42,6 +42,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Сервис для управления процессом индексации сайтов.
+ * <p>
+ * Реализует функционал запуска, обработки и завершения индексации сайтов.
+ * Использует многопоточность для параллельной обработки нескольких сайтов и страниц.
+ * Поддерживает сохранение ошибок и логирование состояния процесса.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -71,7 +79,11 @@ public class IndexingServiceImpl implements IndexingService {
 
     private static final String INDEXING_IS_NOT_STARTED = "Индексация не запущена";
 
-
+    /**
+     * Метод, вызываемый при запуске приложения.
+     * Проверяет все сайты со статусом {@link SiteStatus#INDEXING} и переводит их в статус {@link SiteStatus#FAILED},
+     * чтобы завершить некорректные или прерванные индексации.
+     */
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void markAllSitesWithIndexingStatusAsField() {
@@ -82,6 +94,15 @@ public class IndexingServiceImpl implements IndexingService {
         }
     }
 
+    /**
+     * Запускает процесс индексации всех уникальных сайтов из списка.
+     * <p>
+     * Использует {@link ExecutorService} для параллельной обработки сайтов.
+     * Каждый сайт обрабатывается в отдельной задаче.
+     * </p>
+     *
+     * @return {@link IndexingResponse} с информацией о начале индексации
+     */
     @Override
     public IndexingResponse startIndexing() {
         if (isIndexingRunning()) {
@@ -108,6 +129,14 @@ public class IndexingServiceImpl implements IndexingService {
         return new IndexingResponse();
     }
 
+    /**
+     * Получает список уникальных сайтов для индексации.
+     * <p>
+     * Удаляет дубликаты по URL и возвращает уникальные значения.
+     * </p>
+     *
+     * @return список уникальных {@link SiteInfo}
+     */
     private List<SiteInfo> getUniqueSites() {
         if (!sitesList.getSites().isEmpty()) {
             return sitesList.getSites().stream()
@@ -124,6 +153,15 @@ public class IndexingServiceImpl implements IndexingService {
         return Collections.emptyList();
     }
 
+    /**
+     * Обрабатывает индексацию одного сайта.
+     * <p>
+     * Проверяет прерывание потока и вызывает основной метод {@link #processSite(SiteInfo, String, String)}.
+     * Ловит и логирует все исключения.
+     * </p>
+     *
+     * @param info информация о сайте
+     */
     private void handleSiteIndexing(SiteInfo info) {
         try {
             if (Thread.interrupted()) {
@@ -139,6 +177,14 @@ public class IndexingServiceImpl implements IndexingService {
         }
     }
 
+    /**
+     * Асинхронно ожидает завершения всех задач индексации.
+     * <p>
+     * После завершения всех задач сохраняет формы лемм в файл и логирует результат.
+     * </p>
+     *
+     * @param futures список {@link Future} задач индексации
+     */
     private void waitForCompletionAsync(List<Future<?>> futures) {
         new Thread(() -> {
             boolean allTasksCompleted = true;
@@ -161,6 +207,18 @@ public class IndexingServiceImpl implements IndexingService {
         }, "Indexing-Waiter").start();
     }
 
+    /**
+     * Основной метод обработки индексации сайта.
+     * <p>
+     * Подготавливает сайт для индексации, очищает старые данные, выполняет обход сайта
+     * и обновляет статус после успешной индексации или ошибки.
+     * </p>
+     *
+     * @param info      информация о сайте
+     * @param referrer  заголовок Referrer для HTTP-запросов
+     * @param userAgent User-Agent для HTTP-запросов
+     * @throws InterruptedException если поток был прерван
+     */
     private void processSite(SiteInfo info, String referrer, String userAgent) throws InterruptedException {
         log.info("Start indexing site: {}", info.getUrl());
 
@@ -181,6 +239,16 @@ public class IndexingServiceImpl implements IndexingService {
         }
     }
 
+    /**
+     * Подготавливает объект {@link Site} для индексации.
+     * <p>
+     * Если сайт уже существует в базе, очищает его старые данные.
+     * Устанавливает статус {@link SiteStatus#INDEXING}.
+     * </p>
+     *
+     * @param info информация о сайте
+     * @return подготовленный объект {@link Site}
+     */
     private Site prepareSite(SiteInfo info) {
         String siteUrl = modifyUrlToValid(info.getUrl());
         Site site = siteService.findSiteByUrl(siteUrl);
@@ -200,6 +268,14 @@ public class IndexingServiceImpl implements IndexingService {
         return siteService.saveSite(site);
     }
 
+    /**
+     * Удаляет все связанные с сайтом данные из базы данных.
+     * <p>
+     * Удаляет страницы, леммы и индексы поиска.
+     * </p>
+     *
+     * @param site объект {@link Site}, для которого нужно удалить данные
+     */
     private void deleteSiteRelatedInfo(Site site) {
         searchIndexService.deleteAllIndexesBySite(site);
         pageService.deleteAllPagesBySite(site);
@@ -207,6 +283,15 @@ public class IndexingServiceImpl implements IndexingService {
         log.info("Cleared old data for site: {}", site.getUrl());
     }
 
+    /**
+     * Преобразует URL сайта в корректный формат для индексации.
+     * <p>
+     * Добавляет слэш в конец, если его нет.
+     * </p>
+     *
+     * @param url исходный URL
+     * @return скорректированный URL
+     */
     private String modifyUrlToValid(String url) {
         if (!url.endsWith("/")) {
             url = url + "/";
@@ -214,6 +299,14 @@ public class IndexingServiceImpl implements IndexingService {
         return url;
     }
 
+    /**
+     * Запускает рекурсивное обходное сканирование сайта.
+     * Используется ForkJoinPool для параллельной обработки страниц.
+     *
+     * @param site      Сайт, который необходимо проиндексировать.
+     * @param userAgent User-Agent, который будет использован при HTTP-запросах.
+     * @param referrer  Заголовок Referrer для HTTP-запросов.
+     */
     private void crawlSite(Site site, String userAgent, String referrer) {
         int parallelism = Math.max(1, sitesList.getCrawlerParallelism());
         ForkJoinPool forkJoinPool = new ForkJoinPool(parallelism);
@@ -221,6 +314,13 @@ public class IndexingServiceImpl implements IndexingService {
         forkJoinPool.invoke(new PageCrawler(site.getUrl(), userAgent, referrer, site, pageService, siteService, lemmaService, lemmaIndexer));
     }
 
+    /**
+     * Обновляет статус сайта и сохраняет возможную ошибку.
+     *
+     * @param site   Сайт, который необходимо обновить.
+     * @param status Новый статус сайта.
+     * @param error  Сообщение об ошибке, если индексирование завершилось с ошибкой.
+     */
     private void updateSiteStatus(Site site, SiteStatus status, String error) {
         site.setStatus(status);
         site.setLastError(error);
@@ -228,6 +328,12 @@ public class IndexingServiceImpl implements IndexingService {
         siteService.saveSite(site);
     }
 
+    /**
+     * Сохраняет карту лемм (ключевые слова и их формы) в файл.
+     *
+     * @param map      Карта лемм.
+     * @param fileName Имя файла для сохранения.
+     */
     public void saveMap(Map<String, Set<String>> map, String fileName) {
         try (FileOutputStream fileOut = new FileOutputStream(fileName);
              ObjectOutputStream out = new ObjectOutputStream(fileOut)) {
@@ -238,6 +344,13 @@ public class IndexingServiceImpl implements IndexingService {
         }
     }
 
+    /**
+     * Останавливает процесс индексирования всех сайтов.
+     * Прерывает все потоки и ForkJoinPool'ы, обновляет статус сайтов на FAILED,
+     * если они находились в процессе индексирования.
+     *
+     * @return Объект IndexingResponse с результатом операции.
+     */
     @Override
     public IndexingResponse stopIndexing() {
         if (!isIndexingRunning()) {
@@ -275,12 +388,37 @@ public class IndexingServiceImpl implements IndexingService {
         return new IndexingResponse();
     }
 
+    /**
+     * Проверяет, запущено ли индексирование хотя бы одного сайта.
+     *
+     * @return true, если есть сайты со статусом INDEXING, иначе false.
+     */
     @Override
     public boolean isIndexingRunning() {
         List<Site> byStatus = siteService.findSiteByStatus(SiteStatus.INDEXING);
         return !byStatus.isEmpty();
     }
 
+    /**
+     * Индексирует страницу по указанному URL.
+     * <p>
+     * Метод выполняет следующие действия:
+     * <ol>
+     *     <li>Проверяет, принадлежит ли URL к одному из сайтов, указанных в конфигурации.</li>
+     *     <li>Проверяет доступность соединения с URL.</li>
+     *     <li>Если сайт присутствует в конфигурации и доступен, ищет существующий объект Site или создаёт новый.</li>
+     *     <li>Если страница уже индексировалась, удаляет предыдущие данные.</li>
+     *     <li>Парсит страницу и сохраняет её содержимое в базе данных.</li>
+     * </ol>
+     * </p>
+     *
+     * @param pageUrl URL страницы для индексации
+     * @return объект {@link Page}, содержащий данные индексированной страницы, или {@code null}, если:
+     *         <ul>
+     *             <li>URL не соответствует ни одному из сайтов конфигурации</li>
+     *             <li>Соединение с URL недоступно</li>
+     *         </ul>
+     */
     @Override
     public Page indexPage(String pageUrl) {
         SiteInfo info = isPageFromSiteListConfig(pageUrl);
@@ -307,8 +445,12 @@ public class IndexingServiceImpl implements IndexingService {
         return parseAndSavePage(pageUrl, site);
     }
 
-
-    // TODO HANDLE EXCEPTION
+    /**
+     * Проверяет доступность соединения с указанным URL.
+     *
+     * @param url URL для проверки.
+     * @return true, если соединение успешно и код ответа < 400, иначе false.
+     */
     private boolean isConnectionAvailable(String url) {
         int statusCode = 0;
         try {
@@ -319,6 +461,12 @@ public class IndexingServiceImpl implements IndexingService {
         return statusCode < 400;
     }
 
+    /**
+     * Находит сайт в базе по URL или создает новый.
+     *
+     * @param info Информация о сайте.
+     * @return Найденный или созданный объект Site.
+     */
     private Site findOrCreateSite(SiteInfo info) {
         Site site = siteService.findSiteByUrl(info.getUrl());
 
@@ -329,6 +477,12 @@ public class IndexingServiceImpl implements IndexingService {
         return site;
     }
 
+    /**
+     * Создает новый сайт и сохраняет его в базе.
+     *
+     * @param info Информация о сайте.
+     * @return Созданный объект Site.
+     */
     private Site createAndSaveSite(SiteInfo info) {
         Site site = new Site();
         site.setUrl(modifyUrlToValid(info.getUrl()));
@@ -338,7 +492,14 @@ public class IndexingServiceImpl implements IndexingService {
         return siteService.saveSite(site);
     }
 
-
+    /**
+     * Парсит страницу по URL и сохраняет её содержимое в базу.
+     * Обновляет статус сайта на INDEXED или FAILED при ошибке.
+     *
+     * @param url  URL страницы.
+     * @param site Сайт, которому принадлежит страница.
+     * @return Объект Page с данными страницы или null при ошибке.
+     */
     private Page parseAndSavePage(String url, Site site) {
         Page page = null;
         try {
@@ -367,6 +528,12 @@ public class IndexingServiceImpl implements IndexingService {
         return page;
     }
 
+    /**
+     * Проверяет, принадлежит ли страница одному из сайтов, указанных в конфигурации.
+     *
+     * @param pageUrl URL страницы.
+     * @return Информация о сайте SiteInfo, если страница совпадает, иначе null.
+     */
     private SiteInfo isPageFromSiteListConfig(String pageUrl) {
         try {
             URL pageUri = new URL(pageUrl);

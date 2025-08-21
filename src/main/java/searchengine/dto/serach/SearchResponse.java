@@ -9,11 +9,11 @@ import java.util.List;
 @Setter
 public class SearchResponse {
 
-        private boolean result = true;
+    private boolean result = true;
 
-        private String error;
+    private String error;
 
-        private Integer count;
+    private Integer count;
 
-        private List<SearchDto> data;
+    private List<SearchDto> data;
 }

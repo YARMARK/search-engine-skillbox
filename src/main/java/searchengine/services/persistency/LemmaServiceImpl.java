@@ -19,6 +19,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
+/**
+ * {@inheritDoc}
+ * <p>
+ * Обеспечивает извлечение, сохранение, поиск и удаление лемм,
+ * а также взаимодействие с базой данных через {@link LemmaRepository} и {@link JdbcTemplate}.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -36,6 +43,14 @@ public class LemmaServiceImpl implements LemmaService {
                 ON DUPLICATE KEY UPDATE frequency = frequency + VALUES(frequency)
             """;
 
+    /**
+     * Инициализация LemmaFinder после создания бина.
+     * <p>
+     * Используется аннотация @PostConstruct для выполнения инициализации после инъекции зависимостей.
+     * </p>
+     *
+     * @throws RuntimeException если инициализация LemmaFinder не удалась
+     */
     @PostConstruct
     public void init() {
         try {
@@ -45,69 +60,101 @@ public class LemmaServiceImpl implements LemmaService {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void upsertLemmasInBatch(List<Map.Entry<String, Integer>> batch, int siteId) {
-
         jdbcTemplate.batchUpdate(upserLemmaInBatch, batch, batch.size(), (ps, entry) -> {
-            ps.setString(1, entry.getKey());   // lemma
-            ps.setInt(2, entry.getValue());    // frequency
-            ps.setInt(3, siteId);              // site_id
+            ps.setString(1, entry.getKey());
+            ps.setInt(2, entry.getValue());
+            ps.setInt(3, siteId);
         });
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Map<String, Integer> collectLemmas(String text) {
         return lemmaFinder.collectLemmas(text);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public ConcurrentMap<String, Set<String>> getLemmaForms() {
         return lemmaFinder.getLemmaFormsMap();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public int getLemmaFrequency(String lemma) {
         return lemmaRepository.findAllByLemma(lemma).size();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<Lemma> findAllLemmasByLemma(String s) {
         return lemmaRepository.findAllByLemma(s);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<Lemma> findAllByLemmaInAndSite(List<String> lemmas, int siteId) {
         return lemmaRepository.findAllByLemmaInAndSite(lemmas, siteId);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public Optional<Lemma> findLemmaByLemmaAndSite(String lemmaText, Site site) {
         return lemmaRepository.findByLemmaAndSite(lemmaText, site);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public Integer countLemmasBySite(Site site) {
         return lemmaRepository.countLemmasBySite(site);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public Integer countAllLemmas() {
         return lemmaRepository.countAllLemmas();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void deleteAllLemmasBySite(Site site) {
         lemmaRepository.deleteAllLemmasBySite(site);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<Lemma> findAllByLemma(String lemma) {

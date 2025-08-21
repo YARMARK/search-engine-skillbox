@@ -18,6 +18,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * {@inheritDoc}
+ * <p>
+ * В этой реализации используется {@link PageRepository} для работы с базой данных,
+ * а также класс {@link SearchIndexService} и {@link LemmaService} для работы с индексами и леммами.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -29,6 +36,9 @@ public class PageServiceImpl implements PageService {
 
     private final LemmaService lemmaService;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public boolean existsPageByPath(String path) {
@@ -36,42 +46,63 @@ public class PageServiceImpl implements PageService {
         return pageRepository.existsPageByPath(path);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void deletePageByPath(String url) {
         pageRepository.deletePageByPath(url);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public Page findPageByPath(String url) {
         return pageRepository.findByPath(url);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public int countPageBySite(Site site) {
         return pageRepository.countBySite(site);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<Page> findAllPagesBySite(Site site) {
         return pageRepository.findAllBySite(site);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<Page> searchPageByQueryAndSite(String query, Site site, Pageable pageable) {
         return pageRepository.searchByQueryAndSite(query, site, pageable);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<Page> searchPageByQuery(String query, Pageable pageable) {
         return pageRepository.searchByQuery(query, pageable);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void deleteAllPagesBySite(Site site) {
@@ -79,16 +110,21 @@ public class PageServiceImpl implements PageService {
         pageRepository.deleteAllPagesBySite(site);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public Page savePage(Page page) {
         log.debug("Saving page: {}", page.getPath());
         return pageRepository.save(page);
     }
-
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
-    public List<Page> findAllPagesByLemmaAndSite(String lemma, Site site){
+    public List<Page> findAllPagesByLemmaAndSite(String lemma, Site site) {
         Optional<Lemma> byLemmaAndSite = lemmaService.findLemmaByLemmaAndSite(lemma, site);
         if (!byLemmaAndSite.isPresent()) {
             log.warn("Lemma not found: '{}' for site: {}", lemma, site.getUrl());
@@ -107,6 +143,9 @@ public class PageServiceImpl implements PageService {
                 .toList();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<Page> findAllPagesByLemmas(List<Lemma> lemmas) {
@@ -120,6 +159,10 @@ public class PageServiceImpl implements PageService {
                 .toList();
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public int countAllPages(){
         return (int) pageRepository.count();
     }

@@ -24,7 +24,18 @@ import java.util.regex.Pattern;
 
 import static searchengine.util.UrlUtil.isFile;
 
-
+/**
+ * PageCrawler — рекурсивная задача для обхода страниц сайта и индексирования их содержимого.
+ * <p>
+ * Использует {@link RecursiveAction} из Fork/Join Framework для параллельной обработки страниц.
+ * Каждая страница скачивается с помощью Jsoup, сохраняется в базу данных, и создаются дочерние задачи
+ * для всех ссылок на той же странице, которые ведут на тот же сайт.
+ * </p>
+ * <p>
+ * Поддерживает проверку валидности ссылок, пропуск файлов и URL с определёнными паттернами.
+ * Реализует задержку между запросами для уменьшения нагрузки на сайт.
+ * </p>
+ */
 @Slf4j
 @AllArgsConstructor
 public class PageCrawler extends RecursiveAction {
@@ -53,11 +64,29 @@ public class PageCrawler extends RecursiveAction {
 
     private final Set<String> visitedLinks;
 
+    /**
+     * Конструктор без параметра visitedLinks — создаёт новый потокобезопасный набор посещённых ссылок.
+     *
+     * @param url URL страницы для обработки
+     * @param userAgent User-Agent для HTTP-запроса
+     * @param referrer Referrer для HTTP-запроса
+     * @param site Сайт, которому принадлежит URL
+     * @param pageService сервис для работы со страницами
+     * @param siteService сервис для работы с сайтом
+     * @param lemmaService сервис для работы с леммами
+     * @param lemmaIndexer сервис для индексирования лемм
+     */
     public PageCrawler(String url, String userAgent, String referrer, Site site,
                        PageService pageService, SiteService siteService, LemmaService lemmaService, LemmaIndexer lemmaIndexer) {
         this(url, userAgent, referrer, site, pageService, siteService, lemmaService, lemmaIndexer, ConcurrentHashMap.newKeySet());
     }
 
+    /**
+     * Основной метод задачи Fork/Join.
+     * <p>
+     * Проверяет прерывание, валидность страницы, посещение ссылки, затем вызывает {@link #processPage()}.
+     * </p>
+     */
     @Override
     protected void compute() {
         if (isInterrupted()) {
@@ -85,10 +114,21 @@ public class PageCrawler extends RecursiveAction {
         }
     }
 
+    /**
+     * Проверяет, что страница принадлежит сайту (начинается с URL сайта).
+     *
+     * @return true если страница принадлежит сайту, иначе false
+     */
     private boolean isDaughterPage() {
         return url.startsWith(site.getUrl());
     }
 
+    /**
+     * Обрабатывает страницу: скачивает, сохраняет, индексирует леммы, создаёт дочерние задачи для ссылок.
+     *
+     * @throws InterruptedException если поток был прерван во время ожидания
+     * @throws IOException если произошла ошибка при скачивании страницы
+     */
     private void processPage() throws InterruptedException, IOException {
         if (!isValidLink() || isFile(url)) {
             log.debug("Skipping non-html or invalid link: {}", url);
@@ -120,6 +160,12 @@ public class PageCrawler extends RecursiveAction {
         processChildLinks(document);
     }
 
+    /**
+     * Выполняет HTTP-запрос к странице с помощью Jsoup.
+     *
+     * @return объект Connection.Response с данными страницы
+     * @throws IOException если произошла ошибка запроса
+     */
     private Connection.Response fetchPage() throws IOException {
         return Jsoup.connect(url)
                 .userAgent(userAgent)
@@ -127,6 +173,12 @@ public class PageCrawler extends RecursiveAction {
                 .execute();
     }
 
+    /**
+     * Сохраняет страницу в базу данных, обновляет временную метку сайта и индексирует леммы.
+     *
+     * @param response ответ HTTP
+     * @param document HTML-документ страницы
+     */
     private void savePage(Connection.Response response, Document document) {
         log.info("Page parsing process is running: {}", url);
 
@@ -211,15 +263,29 @@ public class PageCrawler extends RecursiveAction {
         return response.statusCode() < 400;
     }
 
-
+    /**
+     * Генерирует случайную задержку между запросами в пределах MIN_DELAY_MS и MAX_DELAY_MS.
+     *
+     * @return случайное значение задержки в миллисекундах
+     */
     private int generateRandomDelay() {
         return MIN_DELAY_MS + (int) (Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS));
     }
 
+    /**
+     * Проверяет, прерван ли текущий поток.
+     *
+     * @return true если поток был прерван, иначе false
+     */
     private boolean isInterrupted() {
         return Thread.currentThread().isInterrupted();
     }
 
+    /**
+     * Обрабатывает прерывание задачи: логирует и очищает набор посещённых ссылок.
+     *
+     * @param context описание момента прерывания
+     */
     private void handleInterruption(String context) {
         log.info("Task was interrupted {}: {}", context, url);
         visitedLinks.clear();

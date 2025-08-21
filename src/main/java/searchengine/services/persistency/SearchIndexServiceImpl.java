@@ -14,6 +14,13 @@ import searchengine.services.SearchIndexService;
 import java.util.Collection;
 import java.util.List;
 
+/**
+ * Реализация {@link SearchIndexService} для работы с поисковыми индексами.
+ * <p>
+ * Обеспечивает сохранение, удаление и поиск индексов,
+ * а также взаимодействие с базой данных через {@link SearchIndexRepository}.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -21,6 +28,9 @@ public class SearchIndexServiceImpl implements SearchIndexService {
 
     private final SearchIndexRepository searchIndexRepository;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void saveAllIndexes(Collection<SearchIndex> indexes) {
@@ -28,6 +38,9 @@ public class SearchIndexServiceImpl implements SearchIndexService {
         searchIndexRepository.saveAll(indexes);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void deleteIndexByPage(Page page) {
@@ -35,24 +48,36 @@ public class SearchIndexServiceImpl implements SearchIndexService {
         searchIndexRepository.deleteByPage(page);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<SearchIndex> findIndexesByPage(Page page) {
         return searchIndexRepository.findByPage(page);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<SearchIndex> findAllIndexesByLemma(Lemma lemma) {
         return searchIndexRepository.findAllByLemma(lemma);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<SearchIndex> findAllIndexesByLemmas(List<Lemma> lemmas) {
         return searchIndexRepository.findAllByLemmas(lemmas);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void deleteAllIndexesBySite(Site site) {
@@ -60,6 +85,9 @@ public class SearchIndexServiceImpl implements SearchIndexService {
         searchIndexRepository.deleteAllIndexesBySite(site);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional(readOnly = true)
     public List<SearchIndex> findAllIndicesByPage(Page page) {

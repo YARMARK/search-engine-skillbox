@@ -32,6 +32,7 @@ public class PageServiceImpl implements PageService {
     @Override
     @Transactional(readOnly = true)
     public boolean existsPageByPath(String path) {
+        log.debug("Deleting page by path: {}", path);
         return pageRepository.existsPageByPath(path);
     }
 
@@ -74,12 +75,14 @@ public class PageServiceImpl implements PageService {
     @Override
     @Transactional
     public void deleteAllPagesBySite(Site site) {
+        log.info("Deleting all pages for site: {}", site.getUrl());
         pageRepository.deleteAllPagesBySite(site);
     }
 
     @Override
     @Transactional
     public Page savePage(Page page) {
+        log.debug("Saving page: {}", page.getPath());
         return pageRepository.save(page);
     }
 

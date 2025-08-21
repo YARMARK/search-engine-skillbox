@@ -86,7 +86,7 @@ public class LemmaFinder {
      * @return ключ является леммой, а значение количеством найденных лемм
      */
     public Map<String, Integer> collectLemmas(String text) {
-        log.info("Collecting lemmas starts");
+        log.debug("Collecting lemmas starts");
 
         String[] words = arrayContainsRussianWords(text);
         HashMap<String, Integer> lemmas = new HashMap<>();
@@ -158,7 +158,7 @@ public class LemmaFinder {
      * @return набор уникальных лемм найденных в тексте
      */
     public Set<String> getLemmaSet(String text) {
-        log.info("Get lemmas set from: {}", text);
+        log.debug("Extracting lemma set from text length={}", text.length());
         String[] textArray = arrayContainsRussianWords(text);
         Set<String> lemmaSet = new HashSet<>();
         for (String word : textArray) {
@@ -208,7 +208,7 @@ public class LemmaFinder {
     }
 
     public String cleanHtmlTag(String html) {
-        log.info("Clean HTML");
+        log.debug("Clean HTML");
         Document doc = Jsoup.parse(html);
         return Jsoup.clean(doc.body().html(), Safelist.none());
     }

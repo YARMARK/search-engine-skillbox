@@ -74,7 +74,7 @@ public class IndexingServiceImpl implements IndexingService {
 
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
-    public void markAllSitesWithIndexingStatusAsField(){
+    public void markAllSitesWithIndexingStatusAsField() {
         List<Site> sites = siteService.findSiteByStatus(SiteStatus.INDEXING);
         for (Site site : sites) {
             site.setStatus(SiteStatus.FAILED);
@@ -162,48 +162,49 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void processSite(SiteInfo info, String referrer, String userAgent) throws InterruptedException {
+        log.info("Start indexing site: {}", info.getUrl());
+
         if (Thread.currentThread().isInterrupted()) {
             throw new InterruptedException();
         }
 
-        deleteExistingData(info.getUrl());
-        Site site = createAndSaveSite(info);
-        log.info("Created new site: {}", info.getUrl());
+        Site site = prepareSite(info);
+        log.info("Prepared site for indexing: {}", site.getUrl());
 
         try {
             crawlSite(site, userAgent, referrer);
             updateSiteStatus(site, SiteStatus.INDEXED, null);
         } catch (Exception e) {
-            log.error("Error processing site: {}", info.getUrl(), e);
+            log.error("Error processing site: {}", site.getUrl(), e);
             updateSiteStatus(site, SiteStatus.FAILED, e.getMessage());
             throw e;
         }
-
     }
 
-    private void deleteExistingData(String siteUrl) {
-        siteUrl = modifyUrlToValid(siteUrl);
+    private Site prepareSite(SiteInfo info) {
+        String siteUrl = modifyUrlToValid(info.getUrl());
         Site site = siteService.findSiteByUrl(siteUrl);
+
         if (site == null) {
-            log.warn("Site not found for url: {}", siteUrl);
-            return;
+            site = new Site();
+            site.setUrl(siteUrl);
+            site.setName(info.getName());
+        } else {
+            deleteSiteRelatedInfo(site);
         }
 
+        site.setStatus(SiteStatus.INDEXING);
+        site.setStatusTime(LocalDateTime.now());
+        site.setLastError(null);
+
+        return siteService.saveSite(site);
+    }
+
+    private void deleteSiteRelatedInfo(Site site) {
         searchIndexService.deleteAllIndexesBySite(site);
         pageService.deleteAllPagesBySite(site);
         lemmaService.deleteAllLemmasBySite(site);
-        siteService.deleteSite(site);
-
-        log.info("Deleted site related info, url: {}", siteUrl);
-    }
-
-    private Site createAndSaveSite(SiteInfo info) {
-        Site site = new Site();
-        site.setUrl(modifyUrlToValid(info.getUrl()));
-        site.setName(info.getName());
-        site.setStatus(SiteStatus.INDEXING);
-        site.setStatusTime(LocalDateTime.now());
-        return siteService.saveSite(site);
+        log.info("Cleared old data for site: {}", site.getUrl());
     }
 
     private String modifyUrlToValid(String url) {
@@ -230,8 +231,8 @@ public class IndexingServiceImpl implements IndexingService {
     public void saveMap(Map<String, Set<String>> map, String fileName) {
         try (FileOutputStream fileOut = new FileOutputStream(fileName);
              ObjectOutputStream out = new ObjectOutputStream(fileOut)) {
-             out.writeObject(map);
-             log.info("Lemma forms are written to file");
+            out.writeObject(map);
+            log.info("Lemma forms are written to file");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -285,7 +286,7 @@ public class IndexingServiceImpl implements IndexingService {
         SiteInfo info = isPageFromSiteListConfig(pageUrl);
 
         if (info == null) {
-            log.warn("URL does not match any configured site: {}", pageUrl);
+            log.debug("URL does not match any configured site: {}", pageUrl);
             return null;
         }
 
@@ -327,6 +328,16 @@ public class IndexingServiceImpl implements IndexingService {
 
         return site;
     }
+
+    private Site createAndSaveSite(SiteInfo info) {
+        Site site = new Site();
+        site.setUrl(modifyUrlToValid(info.getUrl()));
+        site.setName(info.getName());
+        site.setStatus(SiteStatus.INDEXING);
+        site.setStatusTime(LocalDateTime.now());
+        return siteService.saveSite(site);
+    }
+
 
     private Page parseAndSavePage(String url, Site site) {
         Page page = null;
@@ -370,7 +381,7 @@ public class IndexingServiceImpl implements IndexingService {
                 }
             }
         } catch (MalformedURLException e) {
-            log.error("MalformedURLException {}", e.getMessage());
+            log.warn("MalformedURLException {}", e.getMessage());
             return null;
         }
 

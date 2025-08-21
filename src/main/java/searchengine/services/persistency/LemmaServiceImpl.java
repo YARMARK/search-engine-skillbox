@@ -3,14 +3,8 @@ package searchengine.services.persistency;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.exception.LockAcquisitionException;
-import org.springframework.dao.CannotAcquireLockException;
-import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.Lemma;
 import searchengine.model.Site;
@@ -119,35 +113,4 @@ public class LemmaServiceImpl implements LemmaService {
     public List<Lemma> findAllByLemma(String lemma) {
         return lemmaRepository.findAllByLemma(lemma);
     }
-
-//    @Override
-//    public void saveAllLemmas(Page page) {
-//        Map<String, Integer> lemmasWithCount = lemmaFinder.collectLemmas(page.getContent());
-//        Site site = page.getSite();
-//
-//        for (Map.Entry<String, Integer> entry : lemmasWithCount.entrySet()) {
-//            // TODO мб вынести вот это в одну транзацкию
-//            String lemmaText = entry.getKey();
-//            int count = entry.getValue();
-//
-//            lemmaRepository.upsertLemma(lemmaText, site.getId(), count);
-//
-//            Optional<Lemma> optionalLemma = lemmaRepository.findByLemmaAndSite(lemmaText, site);
-//
-//            if (!optionalLemma.isPresent()) {
-//                log.error("Lemma '" + lemmaText + "' not found");
-//                continue;
-//            }
-//
-//            createIndex(optionalLemma.get(), page, count);
-//        }
-//    }
-//
-//    public SearchIndex createIndex(Lemma lemma, Page page, int count) {
-//        SearchIndex index = new SearchIndex();
-//        index.setLemma(lemma);
-//        index.setPage(page);
-//        index.setRank(count);
-//        return searchIndexRepository.save(index);
-//    }
 }

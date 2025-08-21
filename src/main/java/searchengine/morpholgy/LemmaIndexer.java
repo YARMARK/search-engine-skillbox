@@ -35,7 +35,7 @@ public class LemmaIndexer {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void saveAllLemmas(Page page) {
-        log.info("Start saving lemmas from page pageId{}", page.getId());
+        log.info("Start saving lemmas from pageId={}", page.getId());
         Map<String, Integer> lemmasWithCount = lemmasService.collectLemmas(page.getContent());
         int siteId = page.getSite().getId();
 
@@ -55,10 +55,11 @@ public class LemmaIndexer {
             try {
                 // Сериализуем запись по сайту, чтобы снизить шанс дедлоков между разными страницами одного сайта
                 siteScopedLockManager.executeWithLock(siteId, () -> processSingleBatch(batch, page));
-                log.info("{} from {} batches are saved({} lemmas)",
+                log.debug("{} from {} batches are saved({} lemmas)",
                         (i / batchSize) + 1, totalBatches, batch.size());
             } catch (Exception e) {
-                log.error("Failed to process batch after all retries. The entire transaction will be rolled back.", e);
+                log.error("Failed to process batch for siteId={}, pageId={} after all retries. The transaction will be rolled back.",
+                        page.getSite().getId(), page.getId(), e);
                 throw e;
             }
         }
@@ -68,7 +69,7 @@ public class LemmaIndexer {
     }
 
     @Retryable(
-            value = { CannotAcquireLockException.class, DeadlockLoserDataAccessException.class },
+            value = {CannotAcquireLockException.class, DeadlockLoserDataAccessException.class},
             maxAttempts = 7,
             backoff = @Backoff(delay = 500, maxDelay = 1500, random = true)
     )
@@ -84,7 +85,8 @@ public class LemmaIndexer {
     }
 
     private List<SearchIndex> createIndexes(List<Map.Entry<String, Integer>> batch, Page page) {
-        log.info("Crete searchIndexes for batch");
+        log.debug("Creating search indexes for batch (pageId={}, siteId={}, size={})",
+                page.getId(), page.getSite().getId(), batch.size());
         List<Lemma> lemmas = lemmasService.findAllByLemmaInAndSite(batch.stream()
                 .map(Map.Entry::getKey)
                 .toList(), page.getSite().getId());

@@ -24,13 +24,14 @@ public class SearchIndexServiceImpl implements SearchIndexService {
     @Override
     @Transactional
     public void saveAllIndexes(Collection<SearchIndex> indexes) {
-        log.info("Saving indexes batch");
+        log.info("Saving {} indexes", indexes.size());
         searchIndexRepository.saveAll(indexes);
     }
 
     @Override
     @Transactional
     public void deleteIndexByPage(Page page) {
+        log.debug("Deleting indexes for page: {}", page.getPath());
         searchIndexRepository.deleteByPage(page);
     }
 
@@ -55,6 +56,7 @@ public class SearchIndexServiceImpl implements SearchIndexService {
     @Override
     @Transactional
     public void deleteAllIndexesBySite(Site site) {
+        log.info("Deleting all indexes for site: {}", site.getUrl());
         searchIndexRepository.deleteAllIndexesBySite(site);
     }
 

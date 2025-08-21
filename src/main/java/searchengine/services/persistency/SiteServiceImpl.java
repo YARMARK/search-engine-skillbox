@@ -33,18 +33,21 @@ public class SiteServiceImpl implements SiteService {
     @Override
     @Transactional
     public void deleteSiteByUrl(String url) {
+        log.info("Deleting site by URL: {}", url);
         siteRepository.deleteByUrl(url);
     }
 
     @Override
     @Transactional
     public Site saveSite(Site site) {
+        log.debug("Saving site: {}", site.getUrl());
         return siteRepository.save(site);
     }
 
     @Override
     @Transactional
     public void deleteSite(Site site) {
+        log.info("Deleting site: {}", site.getUrl());
         siteRepository.delete(site);
     }
 
@@ -53,6 +56,4 @@ public class SiteServiceImpl implements SiteService {
     public List<Site> findAllSites() {
         return siteRepository.findAll();
     }
-
-
 }

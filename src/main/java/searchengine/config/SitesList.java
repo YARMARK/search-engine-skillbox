@@ -18,4 +18,8 @@ public class SitesList {
     private String referrer;
 
     private String userAgent;
+
+    private int crawlerParallelism = Runtime.getRuntime().availableProcessors();
+
+    private int maxConcurrentSites = 2;
 }

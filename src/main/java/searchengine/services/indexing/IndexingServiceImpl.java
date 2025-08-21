@@ -91,7 +91,8 @@ public class IndexingServiceImpl implements IndexingService {
 
         List<SiteInfo> uniqueSites = getUniqueSites();
 
-        int maxConcurrentSites = Math.min(4, uniqueSites.size());
+        int configuredMax = Math.max(1, sitesList.getMaxConcurrentSites());
+        int maxConcurrentSites = Math.min(configuredMax, uniqueSites.size());
         siteExecutor = Executors.newFixedThreadPool(maxConcurrentSites);
         List<Future<?>> futures = new ArrayList<>();
 
@@ -213,7 +214,8 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void crawlSite(Site site, String userAgent, String referrer) {
-        ForkJoinPool forkJoinPool = new ForkJoinPool();
+        int parallelism = Math.max(1, sitesList.getCrawlerParallelism());
+        ForkJoinPool forkJoinPool = new ForkJoinPool(parallelism);
         forkJoinPools.add(forkJoinPool);
         forkJoinPool.invoke(new PageCrawler(site.getUrl(), userAgent, referrer, site, pageService, siteService, lemmaService, lemmaIndexer));
     }

@@ -7,6 +7,12 @@ spring:
     url: ${mysql.url}
     username: ${mysql.username}
     password: ${mysql.password}
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 5
+      idle-timeout: 60000
+      max-lifetime: 1800000
+      connection-timeout: 30000
 
   jpa:
     hibernate:
@@ -34,3 +40,5 @@ indexing-settings:
       name: Volochek.life
   referrer: https://www.google.com/
   user-agent: MarikSearchBot
+  crawler-parallelism: 4
+  max-concurrent-sites: 2

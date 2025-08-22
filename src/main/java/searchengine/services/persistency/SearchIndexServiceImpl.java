@@ -9,6 +9,7 @@ import searchengine.model.Page;
 import searchengine.model.SearchIndex;
 import searchengine.model.Site;
 import searchengine.repository.SearchIndexRepository;
+import searchengine.repository.projection.PageRankSum;
 import searchengine.services.SearchIndexService;
 
 import java.util.Collection;
@@ -92,5 +93,14 @@ public class SearchIndexServiceImpl implements SearchIndexService {
     @Transactional(readOnly = true)
     public List<SearchIndex> findAllIndicesByPage(Page page) {
         return searchIndexRepository.findByPage(page);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<PageRankSum> sumRankByPageForLemmas(Collection<Integer> pageIds, Collection<Lemma> lemmas) {
+        return searchIndexRepository.sumRankByPageForLemmas(pageIds, lemmas);
     }
 }

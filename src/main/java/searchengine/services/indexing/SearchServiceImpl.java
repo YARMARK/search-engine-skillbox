@@ -4,20 +4,20 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
 import org.springframework.stereotype.Service;
+import searchengine.config.SearchConfig;
 import searchengine.dto.serach.SearchDto;
 import searchengine.dto.serach.SearchResponse;
+import searchengine.model.Lemma;
 import searchengine.model.Page;
-import searchengine.model.SearchIndex;
 import searchengine.model.Site;
 import searchengine.model.SiteStatus;
-import searchengine.services.IndexingService;
 import searchengine.services.LemmaService;
 import searchengine.services.PageService;
 import searchengine.services.SearchIndexService;
 import searchengine.services.SearchService;
 import searchengine.services.SiteService;
+import searchengine.services.SnippetService;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,15 +27,18 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+/**
+ * Реализация поискового сервиса.
+ * Отвечает за валидацию запроса, извлечение и фильтрацию лемм,
+ * поиск релевантных страниц, вычисление релевантности
+ * и формирование итоговых результатов поиска.
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class SearchServiceImpl implements SearchService {
-
-    private final IndexingService indexingService;
 
     private final LemmaService lemmaService;
 
@@ -43,61 +46,170 @@ public class SearchServiceImpl implements SearchService {
 
     private final SearchIndexService searchIndexService;
 
-    private final Set<String> queryLemmasFormsSet = new HashSet<>();
-
     private final PageService pageService;
 
+    private final SearchConfig searchConfig;
+
+    private final SnippetService snippetService;
+
+    /**
+     * Выполняет полный цикл обработки поискового запроса:
+     * <ul>
+     *     <li>Валидация входных параметров</li>
+     *     <li>Извлечение и фильтрация лемм</li>
+     *     <li>Поиск кандидатов страниц</li>
+     *     <li>Вычисление релевантности</li>
+     *     <li>Формирование DTO с результатами</li>
+     * </ul>
+     *
+     * @param query  текст запроса
+     * @param site   URL сайта (если указан, поиск ограничивается этим сайтом)
+     * @param offset смещение результатов (пагинация)
+     * @param limit  максимальное количество результатов
+     * @return {@link SearchResponse} с найденными результатами или ошибкой
+     */
     @Override
     public SearchResponse search(String query, String site, Integer offset, Integer limit) {
-        if (query == null || query.trim().isEmpty()) {
-            return createErrorResponse("Задан пустой поисковый запрос");
-        }
-        if (site != null && !isSiteIndexed(site)) {
-            return createErrorResponse("Cайт не найден или еще не проиндексирован");
-        } else {
-            if (siteService.findAllSites().isEmpty() || siteService.findAllSites().stream().anyMatch(e -> !e.getStatus().equals(SiteStatus.INDEXED))) {
-                SearchResponse response = new SearchResponse();
-                response.setResult(false);
-                response.setError("Как минимум один из сайтов еще не проиндексирован");
-                return response;
-            }
+        // Валидация и нормализация входных параметров
+        SearchResponse validationResult = validateRequest(query, site, offset, limit);
+        if (!validationResult.isResult()) {
+            return validationResult;
         }
 
-        List<String> lemmas = extractLemmas(query);
-        if (lemmas.isEmpty()) {
-            return createErrorResponse("Не удалось извлечь леммы из запроса");
-        }
-
-        lemmas = filterLemmas(lemmas);
-        if (lemmas.isEmpty()) {
+        // Извлечение и фильтрация лемм
+        List<String> lemmas = extractAndFilterLemmas(query.trim());
+        if (!hasValidLemmas(lemmas)) {
             return createErrorResponse("Все леммы исключены из запроса");
         }
 
-        List<Page> pages = findRelevantPages(lemmas, site);
-        if (pages.isEmpty()) {
+        // Поиск релевантных страниц
+        List<Page> pages = findCandidatePages(lemmas, site != null ? site.trim() : null);
+        if (!hasSearchResults(pages)) {
             return createEmptyResponse();
         }
 
-        // Проходим по каждой лемме и добавляем все ее формы в querySet
-        for (String lemma : lemmas) {
-            Set<String> forms = lemmaService.getLemmaForms().get(lemma.toLowerCase());
-            if (forms != null) {
-                queryLemmasFormsSet.addAll(forms);
-            }
-        }
-
-        List<SearchDto> searchResults = calculateRelevanceAndCreateDtos(pages, query, lemmas, limit, offset, queryLemmasFormsSet);
-        queryLemmasFormsSet.clear();
+        // Расчет релевантности и создание DTO
+        List<SearchDto> searchResults = scoreAndBuildDtos(pages, query.trim(), lemmas, limit, offset);
         return createSuccessResponse(searchResults, pages.size());
     }
 
+    /**
+     * Валидирует поисковый запрос и проверяет наличие проиндексированных сайтов.
+     *
+     * @param query  поисковый запрос
+     * @param site   URL сайта (может быть null)
+     * @param offset смещение
+     * @param limit  ограничение
+     * @return {@link SearchResponse} с ошибкой при неуспехе либо пустой успешный ответ
+     */
+    private SearchResponse validateRequest(String query, String site, Integer offset, Integer limit) {
+        if (query == null || query.trim().isEmpty()) {
+            return createErrorResponse("Задан пустой поисковый запрос");
+        }
+
+        // Если указан конкретный сайт, проверяем только его статус
+        if (site != null) {
+            if (!isSiteIndexed(site)) {
+                return createErrorResponse("Cайт не найден или еще не проиндексирован");
+            }
+        } else {
+            // Если сайт не указан, проверяем что есть хотя бы один проиндексированный сайт
+            List<Site> indexedSites = siteService.findAllSites().stream()
+                    .filter(s -> s.getStatus() == SiteStatus.INDEXED)
+                    .toList();
+            
+            if (indexedSites.isEmpty()) {
+                return createErrorResponse("Нет проиндексированных сайтов для поиска");
+            }
+        }
+
+        return new SearchResponse(); // Успешная валидация
+    }
+
+    /**
+     * Извлекает леммы из запроса и отфильтровывает слишком частотные.
+     *
+     * @param query нормализованный текст запроса
+     * @return список лемм
+     */
+    private List<String> extractAndFilterLemmas(String query) {
+        List<String> lemmas = extractLemmas(query);
+        if (lemmas.isEmpty()) {
+            return lemmas; // Возвращаем пустой список, если не удалось извлечь леммы
+        }
+        return filterLemmas(lemmas);
+    }
+
+    /**
+     * Ищет кандидатов страниц по заданным леммам.
+     *
+     * @param lemmas  список лемм
+     * @param siteUrl URL сайта (если null — поиск по всем сайтам)
+     * @return список страниц-кандидатов
+     */
+    private List<Page> findCandidatePages(List<String> lemmas, String siteUrl) {
+        return findRelevantPages(lemmas, siteUrl);
+    }
+
+    private boolean hasSearchResults(List<Page> pages) {
+        return !pages.isEmpty();
+    }
+
+    private boolean hasValidLemmas(List<String> lemmas) {
+        return !lemmas.isEmpty();
+    }
+
+    /**
+     * Вычисляет релевантность найденных страниц и строит список DTO.
+     *
+     * @param pages   найденные страницы
+     * @param query   исходный поисковый запрос
+     * @param lemmas  список лемм
+     * @param limit   лимит количества результатов
+     * @param offset  смещение для пагинации
+     * @return список объектов {@link SearchDto} с данными результатов
+     */
+    private List<SearchDto> scoreAndBuildDtos(List<Page> pages, String query, List<String> lemmas, Integer limit, Integer offset) {
+        // Нормализация параметров пагинации
+        int normalizedOffset = Math.max(0, offset);
+        int normalizedLimit = Math.max(1, limit);
+        
+        // Создаем локальный набор словоформ для текущего запроса
+        Set<String> queryForms = createQueryFormsSet(lemmas);
+        
+        return calculateRelevanceAndCreateDtos(pages, query, lemmas, normalizedLimit, normalizedOffset, queryForms);
+    }
+
+    private Set<String> createQueryFormsSet(List<String> lemmas) {
+        Set<String> queryForms = new HashSet<>();
+        for (String lemma : lemmas) {
+            Set<String> forms = lemmaService.getLemmaForms().get(lemma.toLowerCase());
+            if (forms != null) {
+                queryForms.addAll(forms);
+            }
+        }
+        return queryForms;
+    }
+
+    /**
+     * Извлекает все леммы из строки запроса.
+     *
+     * @param query поисковый запрос
+     * @return список лемм
+     */
     private List<String> extractLemmas(String query) {
         Map<String, Integer> lemmaMap = lemmaService.collectLemmas(query);
         return new ArrayList<>(lemmaMap.keySet());
     }
 
+    /**
+     * Фильтрует леммы, которые встречаются слишком часто.
+     *
+     * @param lemmas список всех извлечённых лемм
+     * @return отфильтрованный список лемм
+     */
     private List<String> filterLemmas(List<String> lemmas) {
-        final double threshold = 0.7; // Примерное значение, необходимо подстроить
+        double threshold = searchConfig.getFrequencyThreshold();
         int totalPages = pageService.countAllPages();
 
         return lemmas.stream()
@@ -108,14 +220,23 @@ public class SearchServiceImpl implements SearchService {
                 .sorted(Comparator.comparingInt(lemmaService::getLemmaFrequency))
                 .collect(Collectors.toList());
     }
-
+    
     private List<Page> findRelevantPages(List<String> lemmas, String siteUrl) {
         Set<Page> result = new HashSet<>();
 
         if (siteUrl == null) {
-            log.info("Searching across all indexed sites");
+            log.debug("Searching across all indexed sites");
+            // Получаем только проиндексированные сайты
+            List<Site> indexedSites = siteService.findAllSites().stream()
+                    .filter(s -> s.getStatus() == SiteStatus.INDEXED)
+                    .toList();
             for (String lemma : lemmas) {
-                Set<Page> pagesWithLemma = new HashSet<>(pageService.findAllPagesByLemmas(lemmaService.findAllLemmasByLemma(lemma)));
+                Set<Page> pagesWithLemma = new HashSet<>();
+                // Ищем страницы только на проиндексированных сайтах
+                for (Site site : indexedSites) {
+                    pagesWithLemma.addAll(pageService.findAllPagesByLemmaAndSite(lemma, site));
+                }
+
                 if (result.isEmpty()) {
                     result.addAll(pagesWithLemma);
                 } else {
@@ -126,9 +247,8 @@ public class SearchServiceImpl implements SearchService {
                 }
             }
         } else {
-            log.info("Searching on site: {}", siteUrl);
-            Site indexedSite = siteService.findSiteByUrl(siteUrl);
-            if (indexedSite != null && indexedSite.getStatus() == SiteStatus.INDEXED) {
+            log.debug("Searching on site: {}", siteUrl);
+            Site indexedSite = siteService.findSiteByUrl(siteUrl);            if (indexedSite != null && indexedSite.getStatus() == SiteStatus.INDEXED) {
                 for (String lemma : lemmas) {
                     Set<Page> pagesWithLemma = new HashSet<>(pageService.findAllPagesByLemmaAndSite(lemma, indexedSite));
                     if (result.isEmpty()) {
@@ -148,7 +268,17 @@ public class SearchServiceImpl implements SearchService {
         return new ArrayList<>(result);
     }
 
-
+    /**
+     * Выполняет окончательный расчёт релевантности и формирует DTO результатов.
+     *
+     * @param pages    список найденных страниц
+     * @param query    исходный запрос
+     * @param lemmas   список лемм
+     * @param limit    ограничение результатов
+     * @param offset   смещение
+     * @param querySet множество словоформ для лемм
+     * @return список объектов {@link SearchDto}
+     */
     private List<SearchDto> calculateRelevanceAndCreateDtos(List<Page> pages, String query, List<String> lemmas, int limit, int offset, Set<String> querySet) {
         Map<Page, Float> relevancesMap = calculateAbsoluteRelevances(pages, lemmas);
         float maxAbsoluteRelevance = relevancesMap.values().stream()
@@ -159,25 +289,29 @@ public class SearchServiceImpl implements SearchService {
         for (Map.Entry<Page, Float> entry : relevancesMap.entrySet()) {
             Page page = entry.getKey();
             float absoluteRelevance = entry.getValue();
+
+            // Parse HTML once per page
+            Document doc = Jsoup.parse(page.getContent());
+            String title = snippetService.extractTitle(doc);
+            String bodyText = doc.text();
+
             SearchDto searchDto = SearchDto.builder()
                     .site(page.getSite().getUrl())
                     .siteName(page.getSite().getName())
                     .uri(page.getPath())
-                    .title(extractTitle(page.getContent()))
-                    .snippet(generateSnippet(page.getContent(), query, querySet))
-                    .relevance(absoluteRelevance / maxAbsoluteRelevance)
+                    .title(title)
+                    .snippet(snippetService.generateSnippet(bodyText, query, querySet))
+                    .relevance(maxAbsoluteRelevance == 0.0f ? 0.0f : absoluteRelevance / maxAbsoluteRelevance)
                     .build();
             searchResults.add(searchDto);
         }
 
         searchResults.sort((dto1, dto2) -> Float.compare(dto2.getRelevance(), dto1.getRelevance()));
 
-        // Учитываем offset и limit
         int start = Math.min(offset, searchResults.size());
         int end = Math.min(offset + limit, searchResults.size());
         return searchResults.subList(start, end);
     }
-
 
     private boolean isSiteIndexed(String siteUrl) {
         Site site = siteService.findSiteByUrl(siteUrl);
@@ -207,119 +341,43 @@ public class SearchServiceImpl implements SearchService {
         return response;
     }
 
-    private String extractTitle(String content) {
-        Document doc = Jsoup.parse(content);
-        Element titleElement = doc.select("title").first();
-        return titleElement != null ? titleElement.text() : "";
-    }
-
-
-    public String generateSnippet(String htmlContent, String query, Set<String> querySet) {
-        int snippetLength = 200;
-        Document doc = Jsoup.parse(htmlContent);
-        String lowerCaseQuery = query.toLowerCase();
-        String bodyText = doc.text();
-        String lowerCaseContent = bodyText.toLowerCase();
-
-        List<String> queryLemmas = extractLemmas(query);
-
-        // Найти полное совпадение
-        int fullMatchIndex = lowerCaseContent.indexOf(lowerCaseQuery);
-        if (fullMatchIndex != -1) {
-            String snippet = createSnippet(bodyText, fullMatchIndex, lowerCaseQuery.length(), snippetLength);
-            querySet.add(query);
-            snippet = highlightLemmas(snippet, querySet);
-            return "..." + snippet + "...";
-        }
-
-        // Найти совпадение по леммам
-        for (String queryLemma : querySet) {
-            int lemmaIndex = lowerCaseContent.indexOf(queryLemma.toLowerCase());
-            if (lemmaIndex != -1) {
-                String snippet = createSnippet(bodyText, lemmaIndex, queryLemma.length(), snippetLength);
-                snippet = highlightLemmas(snippet, querySet);
-                return "..." + snippet + "...";
-            }
-        }
-
-        return "ничего не найдено";
-    }
-
-    private String createSnippet(String text, int matchIndex, int matchLength, int snippetLength) {
-        int snippetStart = Math.max(0, matchIndex - snippetLength / 2);
-        int snippetEnd = Math.min(text.length(), matchIndex + matchLength + snippetLength / 2);
-        String snippet = text.substring(snippetStart, snippetEnd);
-
-        if (snippetStart > 0) {
-            int spaceIndex = snippet.indexOf(" ");
-            if (spaceIndex != -1) {
-                snippet = snippet.substring(spaceIndex + 1);
-            }
-        }
-        if (snippetEnd < text.length()) {
-            int spaceIndex = snippet.lastIndexOf(" ");
-            if (spaceIndex != -1) {
-                snippet = snippet.substring(0, spaceIndex);
-            }
-        }
-
-        return snippet;
-    }
-
-    // Вспомогательный метод для выделения лемм в сниппете
-    private String highlightLemmas(String snippet, Set<String> querySet) {
-        Pattern multiWordPattern = Pattern.compile(".*\\s+.*"); // Если в строке есть хотя бы один пробел,
-        // не завися от того, какие символы вокруг пробела - строка многословная.
-
-
-        Set<String> multiWordsQuery = querySet.stream()
-                .filter(s -> multiWordPattern.matcher(s).matches())
-                .collect(Collectors.toSet());
-
-        // Сначала выделяем многословные выражения
-        for (String phrase : multiWordsQuery) {
-            snippet = snippet.replaceAll("(?i)" + Pattern.quote(phrase), "<b>" + phrase + "</b>");
-        }
-
-        // Разбиваем snippet на слова
-        String[] words = snippet.split("\\s+");
-        StringBuilder highlightedSnippet = new StringBuilder();
-
-        for (String word : words) {
-            // Сохраняем оригинальное слово и преобразуем его в нижний регистр
-            String cleanWord = word.replaceAll("[^a-zA-Zа-яА-Я]", "").toLowerCase();
-
-            // Проверяем, если очищенное слово есть в querySet
-            if (querySet.contains(cleanWord) && !word.contains("<b>")) { // чтобы избежать двойного выделения
-                highlightedSnippet.append("<b>").append(word).append("</b>");
-            } else {
-                highlightedSnippet.append(word);
-            }
-            highlightedSnippet.append(" ");
-        }
-
-        // Удаляем последний пробел
-        return highlightedSnippet.toString().trim();
-    }
-
-    private float calculateAbsoluteRelevance(Page pages, List<String> lemmas) {
-        List<SearchIndex> indices = searchIndexService.findAllIndicesByPage(pages);
-        float sumOfRanks = 0.0f;
-        for (SearchIndex index : indices) {
-            if (lemmas.contains(index.getLemma().getLemma())) {
-                sumOfRanks += index.getRank();
-            }
-        }
-        return sumOfRanks;
-    }
-
+    /**
+     * Рассчитывает абсолютную релевантность для страниц по набору лемм.
+     *
+     * @param pages  список страниц
+     * @param lemmas список лемм
+     * @return отображение страниц и их абсолютной релевантности
+     */
     private Map<Page, Float> calculateAbsoluteRelevances(List<Page> pages, List<String> lemmas) {
         Map<Page, Float> relevancesMap = new HashMap<>();
-        for (Page page : pages) {
-            float absoluteRelevance = calculateAbsoluteRelevance(page, lemmas);
-            relevancesMap.put(page, absoluteRelevance);
+        if (pages.isEmpty()) {
+            return relevancesMap;
         }
+
+        List<Lemma> lemmaEntities = new ArrayList<>();
+        for (String l : lemmas) {
+            lemmaEntities.addAll(lemmaService.findAllByLemma(l));
+        }
+
+        Map<Integer, Page> pageById = pages.stream().collect(Collectors.toMap(Page::getId, p -> p));
+        List<Integer> pageIds = new ArrayList<>(pageById.keySet());
+
+        if (!lemmaEntities.isEmpty() && !pageIds.isEmpty()) {
+            searchengine.repository.projection.PageRankSum[] sums = searchIndexService
+                    .sumRankByPageForLemmas(pageIds, lemmaEntities)
+                    .toArray(new searchengine.repository.projection.PageRankSum[0]);
+            for (searchengine.repository.projection.PageRankSum prs : sums) {
+                Page page = pageById.get(prs.getPageId());
+                if (page != null) {
+                    relevancesMap.put(page, prs.getSumRank());
+                }
+            }
+        }
+
+        for (Page page : pages) {
+            relevancesMap.putIfAbsent(page, 0.0f);
+        }
+
         return relevancesMap;
     }
 }
-

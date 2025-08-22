@@ -4,12 +4,13 @@ import searchengine.model.Lemma;
 import searchengine.model.Page;
 import searchengine.model.SearchIndex;
 import searchengine.model.Site;
+import searchengine.repository.projection.PageRankSum;
 
 import java.util.Collection;
 import java.util.List;
 
 /**
- * Сервис для работы с поисковыми индексами.
+ * Сервис для работы с поисковыми индексами {@link SearchIndex}.
  * <p>
  * Обеспечивает операции сохранения, удаления и поиска индексов,
  * связанных с {@link Page}, {@link Lemma} и {@link Site}.
@@ -69,4 +70,9 @@ public interface SearchIndexService {
      * @return список {@link SearchIndex}, связанных с данной страницей
      */
     List<SearchIndex> findAllIndicesByPage(Page page);
+
+    /**
+     * Возвращает сумму рангов по страницам для набора страниц и набора лемм.
+     */
+    List<PageRankSum> sumRankByPageForLemmas(Collection<Integer> pageIds, Collection<Lemma> lemmas);
 }

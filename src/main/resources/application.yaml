@@ -32,13 +32,21 @@ spring:
 
 indexing-settings:
   sites:
-#    - url: https://www.lenta.ru/
-#      name: Лента.ру
+    - url: https://www.ipfran.ru/
+      name: ipfran.ru
     - url: https://www.playback.ru/
       name: PlayBack.Ru
-    - url: https://volochek.life/
-      name: Volochek.life
+#    - url: https://volochek.life/
+#      name: Volochek.life
+
   referrer: https://www.google.com/
   user-agent: MarikSearchBot
   crawler-parallelism: 4
   max-concurrent-sites: 2
+
+# Search configuration
+search:
+  # Порог частотности для фильтрации лемм (0.7 = 70% от общего количества страниц)
+  frequency-threshold: 0.7
+  # Максимальная длина сниппета в символах
+  snippet-length: 200

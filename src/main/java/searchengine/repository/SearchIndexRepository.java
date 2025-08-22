@@ -8,7 +8,9 @@ import searchengine.model.Lemma;
 import searchengine.model.Page;
 import searchengine.model.SearchIndex;
 import searchengine.model.Site;
+import searchengine.repository.projection.PageRankSum;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -60,4 +62,16 @@ public interface SearchIndexRepository extends JpaRepository<SearchIndex, Intege
     @Modifying
     @Query("DELETE FROM index_table i WHERE i.page.site = :site")
     void deleteAllIndexesBySite(@Param("site") Site site);
+
+    /**
+     * Возвращает сумму рангов по страницам для набора страниц и набора лемм.
+     * Группирует по page_id.
+     *
+     */
+    @Query("SELECT i.page.id as pageId, SUM(i.rank) as sumRank " +
+            "FROM index_table i " +
+            "WHERE i.page.id IN :pageIds AND i.lemma IN :lemmas " +
+            "GROUP BY i.page.id")
+    List<PageRankSum> sumRankByPageForLemmas(@Param("pageIds") Collection<Integer> pageIds,
+                                             @Param("lemmas") Collection<Lemma> lemmas);
 }

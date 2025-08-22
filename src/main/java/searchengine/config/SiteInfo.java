@@ -5,12 +5,22 @@ import lombok.Setter;
 
 import java.util.Objects;
 
+/**
+ * DTO-класс для описания информации о сайте, который необходимо индексировать.
+ * Используется в конфигурации {@link SitesList}.
+ */
 @Setter
 @Getter
 public class SiteInfo {
 
+    /**
+     * Название сайта (для отображения в результатах поиска).
+     */
     private String url;
 
+    /**
+     * Базовый URL сайта, с которого начинается индексация.
+     */
     private String name;
 
     @Override

@@ -7,14 +7,24 @@ spring:
     url: ${mysql.url}
     username: ${mysql.username}
     password: ${mysql.password}
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 5
+      idle-timeout: 60000
+      max-lifetime: 1800000
+      connection-timeout: 30000
 
   jpa:
     hibernate:
       ddl-auto: none
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
+        order_inserts: true
+        order_updates: true
+        jdbc:
+          batch_size: 50
     open-in-view: true
 
   liquibase:
@@ -22,11 +32,16 @@ spring:
 
 indexing-settings:
   sites:
-    - url: https://www.lenta.ru
-      name: Лента.ру
-    - url: https://www.playback.ru
-      name: PlayBack.Ru
-    - url: https://volochek.life/
-      name: Volochek.life
-  referrer: https://www.google.com
+    - url: https://nikoartgallery.com/
+      name: NikoArtGallery
+    - url: https://www.playback.ru/
+      name: PlayBack
+
+  referrer: https://www.google.com/
   user-agent: MarikSearchBot
+  crawler-parallelism: 4
+  max-concurrent-sites: 2
+
+search:
+  frequency-threshold: 0.7
+  snippet-length: 200

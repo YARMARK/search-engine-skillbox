@@ -4,6 +4,11 @@ import lombok.experimental.UtilityClass;
 
 import java.util.Set;
 
+/**
+ * Утилитный класс для работы с URL.
+ * <p>
+ * Содержит методы для проверки, относится ли URL к файлу по расширению.
+ */
 @UtilityClass
 public class UrlUtil {
 
@@ -12,22 +17,15 @@ public class UrlUtil {
             ".eps", ".xlsx", ".doc", ".pptx", ".docx"
     );
 
-    private static final String[] URL_PREFIXES = {
-            "http://www.", "https://www.", "http://", "https://", "www."
-    };
-
+    /**
+     * Проверяет, оканчивается ли ссылка на одно из известных расширений файлов.
+     *
+     * @param link ссылка для проверки
+     * @return {@code true}, если ссылка указывает на файл, иначе {@code false}
+     */
     public static boolean isFile(String link) {
         String lowerCaseLink = link.toLowerCase();
         return SKIPPED_FILE_EXTENSIONS.stream()
                 .anyMatch(lowerCaseLink::endsWith);
-    }
-
-    public static String getCleanedBaseUrl(String url) {
-        for (String prefix : URL_PREFIXES) {
-            if (url.startsWith(prefix)) {
-                return url.substring(prefix.length());
-            }
-        }
-        return url;
     }
 }

@@ -8,22 +8,34 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import searchengine.model.Page;
 import searchengine.model.Site;
-import searchengine.repository.PageRepository;
-import searchengine.repository.SiteRepository;
+import searchengine.morpholgy.LemmaIndexer;
 import searchengine.services.LemmaService;
+import searchengine.services.PageService;
+import searchengine.services.SiteService;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RecursiveAction;
 import java.util.regex.Pattern;
 
-import static searchengine.util.UrlUtil.getCleanedBaseUrl;
 import static searchengine.util.UrlUtil.isFile;
 
-
+/**
+ * PageCrawler — рекурсивная задача для обхода страниц сайта и индексирования их содержимого.
+ * <p>
+ * Использует {@link RecursiveAction} из Fork/Join Framework для параллельной обработки страниц.
+ * Каждая страница скачивается с помощью Jsoup, сохраняется в базу данных, и создаются дочерние задачи
+ * для всех ссылок на той же странице, которые ведут на тот же сайт.
+ * </p>
+ * <p>
+ * Поддерживает проверку валидности ссылок, пропуск файлов и URL с определёнными паттернами.
+ * Реализует задержку между запросами для уменьшения нагрузки на сайт.
+ * </p>
+ */
 @Slf4j
 @AllArgsConstructor
 public class PageCrawler extends RecursiveAction {
@@ -42,19 +54,39 @@ public class PageCrawler extends RecursiveAction {
 
     private final Site site;
 
-    private final PageRepository pageRepository;
+    private final PageService pageService;
 
-    private final SiteRepository siteRepository;
+    private final SiteService siteService;
 
     private final LemmaService lemmaService;
 
-    private final CopyOnWriteArraySet<String> visitedLinks;
+    private final LemmaIndexer lemmaIndexer;
 
+    private final Set<String> visitedLinks;
+
+    /**
+     * Конструктор без параметра visitedLinks — создаёт новый потокобезопасный набор посещённых ссылок.
+     *
+     * @param url URL страницы для обработки
+     * @param userAgent User-Agent для HTTP-запроса
+     * @param referrer Referrer для HTTP-запроса
+     * @param site Сайт, которому принадлежит URL
+     * @param pageService сервис для работы со страницами
+     * @param siteService сервис для работы с сайтом
+     * @param lemmaService сервис для работы с леммами
+     * @param lemmaIndexer сервис для индексирования лемм
+     */
     public PageCrawler(String url, String userAgent, String referrer, Site site,
-                       PageRepository pageRepository, SiteRepository siteRepository, LemmaService lemmaService) {
-        this(url, userAgent, referrer, site, pageRepository, siteRepository, lemmaService, new CopyOnWriteArraySet<>());
+                       PageService pageService, SiteService siteService, LemmaService lemmaService, LemmaIndexer lemmaIndexer) {
+        this(url, userAgent, referrer, site, pageService, siteService, lemmaService, lemmaIndexer, ConcurrentHashMap.newKeySet());
     }
 
+    /**
+     * Основной метод задачи Fork/Join.
+     * <p>
+     * Проверяет прерывание, валидность страницы, посещение ссылки, затем вызывает {@link #processPage()}.
+     * </p>
+     */
     @Override
     protected void compute() {
         if (isInterrupted()) {
@@ -62,7 +94,10 @@ public class PageCrawler extends RecursiveAction {
             return;
         }
 
-        checkUrlFormat(url);
+        if (!isDaughterPage()) {
+            log.info("Link is not from the site, url {}, \n site {}", url, site);
+            return;
+        }
 
         if (!visitedLinks.add(url)) {
             log.info("Link is already visited: {}", url);
@@ -79,13 +114,27 @@ public class PageCrawler extends RecursiveAction {
         }
     }
 
-    private void checkUrlFormat(String url) {
-        if (!url.endsWith("/")) {
-            this.url = url + "/";
-        }
+    /**
+     * Проверяет, что страница принадлежит сайту (начинается с URL сайта).
+     *
+     * @return true если страница принадлежит сайту, иначе false
+     */
+    private boolean isDaughterPage() {
+        return url.startsWith(site.getUrl());
     }
 
+    /**
+     * Обрабатывает страницу: скачивает, сохраняет, индексирует леммы, создаёт дочерние задачи для ссылок.
+     *
+     * @throws InterruptedException если поток был прерван во время ожидания
+     * @throws IOException если произошла ошибка при скачивании страницы
+     */
     private void processPage() throws InterruptedException, IOException {
+        if (!isValidLink() || isFile(url)) {
+            log.debug("Skipping non-html or invalid link: {}", url);
+            return;
+        }
+
         Thread.sleep(generateRandomDelay());
 
         Connection.Response response = fetchPage();
@@ -95,18 +144,28 @@ public class PageCrawler extends RecursiveAction {
             return;
         }
 
-        Document document = response.parse();
-        if (isValidLink() && isValidStatusCode(response)) {
-            savePage(response, document);
-        }
-
-        if (response.statusCode() >= 400 && response.statusCode() < 600) {
+        String contentType = response.contentType();
+        if (contentType == null || !contentType.startsWith("text/")) {
+            log.debug("Skipping non-text content: {}", contentType);
             return;
         }
+
+        if (!isValidStatusCode(response)) {
+            return;
+        }
+
+        Document document = response.parse();
+        savePage(response, document);
 
         processChildLinks(document);
     }
 
+    /**
+     * Выполняет HTTP-запрос к странице с помощью Jsoup.
+     *
+     * @return объект Connection.Response с данными страницы
+     * @throws IOException если произошла ошибка запроса
+     */
     private Connection.Response fetchPage() throws IOException {
         return Jsoup.connect(url)
                 .userAgent(userAgent)
@@ -114,15 +173,21 @@ public class PageCrawler extends RecursiveAction {
                 .execute();
     }
 
+    /**
+     * Сохраняет страницу в базу данных, обновляет временную метку сайта и индексирует леммы.
+     *
+     * @param response ответ HTTP
+     * @param document HTML-документ страницы
+     */
     private void savePage(Connection.Response response, Document document) {
         log.info("Page parsing process is running: {}", url);
 
         Page page = createPage(response, document);
         updateSiteTimestamp();
 
-        pageRepository.save(page);
-        siteRepository.save(site);
-        lemmaService.saveAllLemmas(page);
+        pageService.savePage(page);
+        siteService.saveSite(site);
+        lemmaIndexer.saveAllLemmas(page);
     }
 
     private Page createPage(Connection.Response response, Document document) {
@@ -136,8 +201,11 @@ public class PageCrawler extends RecursiveAction {
 
     private String getRelativeUrl(String url) {
         String baseUrl = site.getUrl();
-        url = "/" + url.substring(baseUrl.length());
-        return url;
+        if (url.startsWith(baseUrl)) {
+            url = url.substring(baseUrl.length());
+        }
+        if (url.isBlank()) return "/";
+        return url.startsWith("/") ? url : "/" + url;
     }
 
     private void updateSiteTimestamp() {
@@ -170,7 +238,7 @@ public class PageCrawler extends RecursiveAction {
     }
 
     private PageCrawler createChildTask(String nextUrl) {
-        return new PageCrawler(nextUrl, userAgent, referrer, site, pageRepository, siteRepository, lemmaService, visitedLinks);
+        return new PageCrawler(nextUrl, userAgent, referrer, site, pageService, siteService, lemmaService, lemmaIndexer, visitedLinks);
     }
 
     private void waitForChildTasks(List<PageCrawler> childTasks) {
@@ -184,8 +252,7 @@ public class PageCrawler extends RecursiveAction {
     }
 
     private boolean isLink(String link) {
-        String cleanedBaseUrl = getCleanedBaseUrl(link);
-        return link.contains(cleanedBaseUrl) && !containsSkipPatterns(link);
+        return link.startsWith(site.getUrl()) && !containsSkipPatterns(link);
     }
 
     private boolean containsSkipPatterns(String link) {
@@ -196,15 +263,29 @@ public class PageCrawler extends RecursiveAction {
         return response.statusCode() < 400;
     }
 
-
+    /**
+     * Генерирует случайную задержку между запросами в пределах MIN_DELAY_MS и MAX_DELAY_MS.
+     *
+     * @return случайное значение задержки в миллисекундах
+     */
     private int generateRandomDelay() {
         return MIN_DELAY_MS + (int) (Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS));
     }
 
+    /**
+     * Проверяет, прерван ли текущий поток.
+     *
+     * @return true если поток был прерван, иначе false
+     */
     private boolean isInterrupted() {
         return Thread.currentThread().isInterrupted();
     }
 
+    /**
+     * Обрабатывает прерывание задачи: логирует и очищает набор посещённых ссылок.
+     *
+     * @param context описание момента прерывания
+     */
     private void handleInterruption(String context) {
         log.info("Task was interrupted {}: {}", context, url);
         visitedLinks.clear();

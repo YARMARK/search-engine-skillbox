@@ -33,14 +33,6 @@ public interface SearchIndexService {
     void deleteIndexByPage(Page page);
 
     /**
-     * Находит все индексы для конкретной страницы.
-     *
-     * @param page объект {@link Page}, для которого нужно найти индексы
-     * @return список {@link SearchIndex}, связанных с данной страницей
-     */
-    List<SearchIndex> findIndexesByPage(Page page);
-
-    /**
      * Находит все индексы для конкретной леммы.
      *
      * @param lemma объект {@link Lemma}, для которого нужно найти индексы
@@ -62,14 +54,6 @@ public interface SearchIndexService {
      * @param site объект {@link Site}, индексы которого нужно удалить
      */
     void deleteAllIndexesBySite(Site site);
-
-    /**
-     * Находит все индексы для конкретной страницы.
-     *
-     * @param page объект {@link Page}, для которого нужно найти индексы
-     * @return список {@link SearchIndex}, связанных с данной страницей
-     */
-    List<SearchIndex> findAllIndicesByPage(Page page);
 
     /**
      * Возвращает сумму рангов по страницам для набора страниц и набора лемм.

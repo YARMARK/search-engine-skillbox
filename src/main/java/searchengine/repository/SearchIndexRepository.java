@@ -29,14 +29,6 @@ public interface SearchIndexRepository extends JpaRepository<SearchIndex, Intege
     void deleteByPage(Page page);
 
     /**
-     * Находит все индексы, связанные с указанной страницей.
-     *
-     * @param page страница
-     * @return список индексов
-     */
-    List<SearchIndex> findByPage(Page page);
-
-    /**
      * Находит все индексы, связанные с указанной леммой.
      *
      * @param lemma лемма

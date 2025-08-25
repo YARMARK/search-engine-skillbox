@@ -53,14 +53,6 @@ public interface LemmaService {
     int getLemmaFrequency(String lemma);
 
     /**
-     * Находит все леммы по точному совпадению текста.
-     *
-     * @param s текст леммы
-     * @return список найденных лемм
-     */
-    List<Lemma> findAllLemmasByLemma(String s);
-
-    /**
      * Находит все леммы по списку текстов и идентификатору сайта.
      *
      * @param lemmas список текстов лемм
@@ -85,21 +77,6 @@ public interface LemmaService {
      * @return Optional, содержащий найденную лемму или пустой, если не найдено
      */
     Optional<Lemma> findLemmaByLemmaAndSite(String lemma, Site site);
-
-    /**
-     * Подсчитывает количество лемм на сайте.
-     *
-     * @param site объект сайта
-     * @return количество лемм
-     */
-    Integer countLemmasBySite(Site site);
-
-    /**
-     * Подсчитывает общее количество лемм в базе данных.
-     *
-     * @return количество всех лемм
-     */
-    Integer countAllLemmas();
 
     /**
      * Удаляет все леммы, связанные с указанным сайтом.

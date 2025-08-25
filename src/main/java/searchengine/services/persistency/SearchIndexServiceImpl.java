@@ -54,15 +54,6 @@ public class SearchIndexServiceImpl implements SearchIndexService {
      */
     @Override
     @Transactional(readOnly = true)
-    public List<SearchIndex> findIndexesByPage(Page page) {
-        return searchIndexRepository.findByPage(page);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional(readOnly = true)
     public List<SearchIndex> findAllIndexesByLemma(Lemma lemma) {
         return searchIndexRepository.findAllByLemma(lemma);
     }
@@ -84,15 +75,6 @@ public class SearchIndexServiceImpl implements SearchIndexService {
     public void deleteAllIndexesBySite(Site site) {
         log.info("Deleting all indexes for site: {}", site.getUrl());
         searchIndexRepository.deleteAllIndexesBySite(site);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public List<SearchIndex> findAllIndicesByPage(Page page) {
-        return searchIndexRepository.findByPage(page);
     }
 
     /**

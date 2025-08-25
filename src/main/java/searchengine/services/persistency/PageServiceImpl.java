@@ -2,7 +2,6 @@ package searchengine.services.persistency;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.Lemma;
@@ -51,15 +50,6 @@ public class PageServiceImpl implements PageService {
      */
     @Override
     @Transactional
-    public void deletePageByPath(String url) {
-        pageRepository.deletePageByPath(url);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional
     public void deletePage(Page page) {
         pageRepository.delete(page);
     }
@@ -80,33 +70,6 @@ public class PageServiceImpl implements PageService {
     @Transactional(readOnly = true)
     public int countPageBySite(Site site) {
         return pageRepository.countBySite(site);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public List<Page> findAllPagesBySite(Site site) {
-        return pageRepository.findAllBySite(site);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public List<Page> searchPageByQueryAndSite(String query, Site site, Pageable pageable) {
-        return pageRepository.searchByQueryAndSite(query, site, pageable);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public List<Page> searchPageByQuery(String query, Pageable pageable) {
-        return pageRepository.searchByQuery(query, pageable);
     }
 
     /**

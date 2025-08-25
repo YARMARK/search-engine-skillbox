@@ -25,13 +25,6 @@ public interface PageService {
     boolean existsPageByPath(String path);
 
     /**
-     * Удаляет страницу по указанному URL.
-     *
-     * @param url путь страницы для удаления
-     */
-    void deletePageByPath(String url);
-
-    /**
      * Удаляет страницу.
      *
      * @param page страница
@@ -60,33 +53,6 @@ public interface PageService {
      * @return общее количество страниц
      */
     int countAllPages();
-
-    /**
-     * Находит все страницы для конкретного сайта.
-     *
-     * @param site объект Site
-     * @return список страниц сайта
-     */
-    List<Page> findAllPagesBySite(Site site);
-
-    /**
-     * Выполняет поиск страниц по запросу и сайту с постраничной навигацией.
-     *
-     * @param query поисковый запрос
-     * @param site сайт, на котором искать
-     * @param pageable объект Pageable для пагинации
-     * @return список найденных страниц
-     */
-    List<Page> searchPageByQueryAndSite(String query, Site site, Pageable pageable);
-
-    /**
-     * Выполняет поиск страниц по запросу по всем сайтам с постраничной навигацией.
-     *
-     * @param query поисковый запрос
-     * @param pageable объект Pageable для пагинации
-     * @return список найденных страниц
-     */
-    List<Page> searchPageByQuery(String query, Pageable pageable);
 
     /**
      * Удаляет все страницы, принадлежащие конкретному сайту.

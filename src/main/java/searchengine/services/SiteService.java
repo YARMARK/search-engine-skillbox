@@ -30,26 +30,12 @@ public interface SiteService {
     List<Site> findSiteByStatus(SiteStatus status);
 
     /**
-     * Удаляет сайт по его URL.
-     *
-     * @param url URL сайта, который нужно удалить
-     */
-    void deleteSiteByUrl(String url);
-
-    /**
      * Сохраняет сайт в базе данных.
      *
      * @param site объект Site для сохранения
      * @return сохраненный объект Site
      */
     Site saveSite(Site site);
-
-    /**
-     * Удаляет указанный сайт из базы данных.
-     *
-     * @param site объект Site для удаления
-     */
-    void deleteSite(Site site);
 
     /**
      * Находит и возвращает список всех сайтов в базе данных.

@@ -198,7 +198,6 @@ public class IndexingServiceImpl implements IndexingService {
                 }
             }
 
-            saveMap(lemmaService.getLemmaForms(), "lemma/lemma-forms.txt");
             if (allTasksCompleted) {
                 log.info("All indexing tasks completed successfully.");
             } else {
@@ -326,22 +325,6 @@ public class IndexingServiceImpl implements IndexingService {
         site.setLastError(error);
         site.setStatusTime(LocalDateTime.now());
         siteService.saveSite(site);
-    }
-
-    /**
-     * Сохраняет карту лемм (ключевые слова и их формы) в файл.
-     *
-     * @param map      Карта лемм.
-     * @param fileName Имя файла для сохранения.
-     */
-    public void saveMap(Map<String, Set<String>> map, String fileName) {
-        try (FileOutputStream fileOut = new FileOutputStream(fileName);
-             ObjectOutputStream out = new ObjectOutputStream(fileOut)) {
-            out.writeObject(map);
-            log.info("Lemma forms are written to file");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 
     /**

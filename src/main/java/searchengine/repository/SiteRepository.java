@@ -29,11 +29,4 @@ public interface SiteRepository extends JpaRepository<Site, Integer> {
      * @return список сайтов с указанным статусом
      */
     List<Site> findByStatus(SiteStatus status);
-
-    /**
-     * Удаляет сайт по его URL.
-     *
-     * @param url URL сайта, который нужно удалить
-     */
-    void deleteByUrl(String url);
 }

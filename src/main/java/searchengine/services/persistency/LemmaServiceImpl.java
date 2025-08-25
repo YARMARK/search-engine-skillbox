@@ -103,15 +103,6 @@ public class LemmaServiceImpl implements LemmaService {
      */
     @Override
     @Transactional(readOnly = true)
-    public List<Lemma> findAllLemmasByLemma(String s) {
-        return lemmaRepository.findAllByLemma(s);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional(readOnly = true)
     public List<Lemma> findAllByLemmaInAndSite(List<String> lemmas, int siteId) {
         return lemmaRepository.findAllByLemmaInAndSite(lemmas, siteId);
     }
@@ -123,24 +114,6 @@ public class LemmaServiceImpl implements LemmaService {
     @Transactional(readOnly = true)
     public Optional<Lemma> findLemmaByLemmaAndSite(String lemmaText, Site site) {
         return lemmaRepository.findByLemmaAndSite(lemmaText, site);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public Integer countLemmasBySite(Site site) {
-        return lemmaRepository.countLemmasBySite(site);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public Integer countAllLemmas() {
-        return lemmaRepository.countAllLemmas();
     }
 
     /**

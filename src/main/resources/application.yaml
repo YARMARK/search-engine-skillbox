@@ -36,8 +36,6 @@ indexing-settings:
       name: NikoArtGallery
     - url: https://www.playback.ru/
       name: PlayBack
-#    - url: https://volochek.life/
-#      name: Volochek.life
 
   referrer: https://www.google.com/
   user-agent: MarikSearchBot

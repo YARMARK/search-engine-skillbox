@@ -32,10 +32,10 @@ spring:
 
 indexing-settings:
   sites:
-    - url: https://www.ipfran.ru/
-      name: ipfran.ru
+    - url: https://nikoartgallery.com/
+      name: NikoArtGallery
     - url: https://www.playback.ru/
-      name: PlayBack.Ru
+      name: PlayBack
 #    - url: https://volochek.life/
 #      name: Volochek.life
 
@@ -44,9 +44,6 @@ indexing-settings:
   crawler-parallelism: 4
   max-concurrent-sites: 2
 
-# Search configuration
 search:
-  # Порог частотности для фильтрации лемм (0.7 = 70% от общего количества страниц)
   frequency-threshold: 0.7
-  # Максимальная длина сниппета в символах
   snippet-length: 200

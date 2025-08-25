@@ -32,6 +32,13 @@ public interface PageService {
     void deletePageByPath(String url);
 
     /**
+     * Удаляет страницу.
+     *
+     * @param page страница
+     */
+    void deletePage(Page page);
+
+    /**
      * Находит страницу по указанному URL.
      *
      * @param url путь страницы

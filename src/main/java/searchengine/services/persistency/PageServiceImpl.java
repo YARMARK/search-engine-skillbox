@@ -59,6 +59,15 @@ public class PageServiceImpl implements PageService {
      * {@inheritDoc}
      */
     @Override
+    @Transactional
+    public void deletePage(Page page) {
+        pageRepository.delete(page);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     @Transactional(readOnly = true)
     public Page findPageByPath(String url) {
         return pageRepository.findByPath(url);

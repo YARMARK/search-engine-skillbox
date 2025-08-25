@@ -1603,7 +1603,7 @@ var API = function(){
                                 break;
                             
                         }
-                        $('select[name="site"]').append('' +
+                        $('select[name="siteInfo"]').append('' +
                             '<option value="' + site.url + '">' +
                                 site.url +
                             '</option>')
@@ -1757,8 +1757,8 @@ var API = function(){
                                     offset: 0,
                                     limit: $this.data('sendlimit')
                                 };
-                                if ( $this.find('[name="site"]').val() ) {
-                                    data.site = $this.find('[name="site"]').val();
+                                if ( $this.find('[name="siteInfo"]').val() ) {
+                                    data.site = $this.find('[name="siteInfo"]').val();
                                 }
                             }
                             break;

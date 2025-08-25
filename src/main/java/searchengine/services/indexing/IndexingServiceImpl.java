@@ -439,7 +439,7 @@ public class IndexingServiceImpl implements IndexingService {
 
         if (pageService.existsPageByPath(pageUrl)) {
             log.info("Page already indexed, removing previous data: {}", pageUrl);
-            pageService.deletePageByPath(pageUrl);
+            deletePageInfo(pageUrl);
         }
 
         return parseAndSavePage(pageUrl, site);
@@ -490,6 +490,17 @@ public class IndexingServiceImpl implements IndexingService {
         site.setStatus(SiteStatus.INDEXING);
         site.setStatusTime(LocalDateTime.now());
         return siteService.saveSite(site);
+    }
+
+    /**
+     * Удаляет страницу и ее индексы.
+     *
+     * @param pageUrl URL страницыю
+     */
+    private void deletePageInfo(String pageUrl) {
+        Page page = pageService.findPageByPath(pageUrl);
+        searchIndexService.deleteIndexByPage(page);
+        pageService.deletePage(page);
     }
 
     /**

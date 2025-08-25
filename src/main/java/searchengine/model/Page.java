@@ -46,7 +46,7 @@ public class Page implements Serializable {
     private int id;
 
     /** Сайт, к которому относится данная страница */
-    @ManyToOne(fetch = EAGER)
+    @ManyToOne
     @JoinColumn(name = "site_id", nullable = false, referencedColumnName = "id")
     private Site site;
 

@@ -105,7 +105,7 @@ public class ApiController {
         if (page == null) {
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
-                    .body(new IndexingResponse("Страница не найдена или не была проиндексирована"));
+                    .body(new IndexingResponse("Данная страница находится за пределами сайтов, указанных в конфигурационном файле"));
         }
 
         lemmaIndexer.saveAllLemmas(page);

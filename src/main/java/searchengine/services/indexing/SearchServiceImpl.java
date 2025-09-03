@@ -96,8 +96,8 @@ public class SearchServiceImpl implements SearchService {
     /**
      * Валидирует поисковый запрос и проверяет наличие проиндексированных сайтов.
      *
-     * @param query  поисковый запрос
-     * @param site   URL сайта (может быть null)
+     * @param query поисковый запрос
+     * @param site  URL сайта (может быть null)
      * @return {@link SearchResponse} с ошибкой при неуспехе либо пустой успешный ответ
      */
     private SearchResponse validateRequest(String query, String site) {
@@ -115,7 +115,7 @@ public class SearchServiceImpl implements SearchService {
             List<Site> indexedSites = siteService.findAllSites().stream()
                     .filter(s -> s.getStatus() == SiteStatus.INDEXED)
                     .toList();
-            
+
             if (indexedSites.isEmpty()) {
                 return createErrorResponse("Нет проиндексированных сайтов для поиска");
             }
@@ -160,21 +160,21 @@ public class SearchServiceImpl implements SearchService {
     /**
      * Вычисляет релевантность найденных страниц и строит список DTO.
      *
-     * @param pages   найденные страницы
-     * @param query   исходный поисковый запрос
-     * @param lemmas  список лемм
-     * @param limit   лимит количества результатов
-     * @param offset  смещение для пагинации
+     * @param pages  найденные страницы
+     * @param query  исходный поисковый запрос
+     * @param lemmas список лемм
+     * @param limit  лимит количества результатов
+     * @param offset смещение для пагинации
      * @return список объектов {@link SearchDto} с данными результатов
      */
     private List<SearchDto> scoreAndBuildDtos(List<Page> pages, String query, List<String> lemmas, Integer limit, Integer offset) {
         // Нормализация параметров пагинации
         int normalizedOffset = Math.max(0, offset);
         int normalizedLimit = Math.max(1, limit);
-        
+
         // Создаем локальный набор словоформ для текущего запроса
         Set<String> queryForms = createQueryFormsSet(lemmas);
-        
+
         return calculateRelevanceAndCreateDtos(pages, query, lemmas, normalizedLimit, normalizedOffset, queryForms);
     }
 
@@ -218,7 +218,7 @@ public class SearchServiceImpl implements SearchService {
                 .sorted(Comparator.comparingInt(lemmaService::getLemmaFrequency))
                 .collect(Collectors.toList());
     }
-    
+
     private List<Page> findRelevantPages(List<String> lemmas, String siteUrl) {
         Set<Page> result = new HashSet<>();
 
@@ -246,7 +246,8 @@ public class SearchServiceImpl implements SearchService {
             }
         } else {
             log.debug("Searching on site: {}", siteUrl);
-            Site indexedSite = siteService.findSiteByUrl(siteUrl);            if (indexedSite != null && indexedSite.getStatus() == SiteStatus.INDEXED) {
+            Site indexedSite = siteService.findSiteByUrl(siteUrl);
+            if (indexedSite != null && indexedSite.getStatus() == SiteStatus.INDEXED) {
                 for (String lemma : lemmas) {
                     Set<Page> pagesWithLemma = new HashSet<>(pageService.findAllPagesByLemmaAndSite(lemma, indexedSite));
                     if (result.isEmpty()) {
@@ -296,7 +297,7 @@ public class SearchServiceImpl implements SearchService {
             SearchDto searchDto = SearchDto.builder()
                     .site(page.getSite().getUrl())
                     .siteName(page.getSite().getName())
-                    .uri(page.getPath())
+                    .uri(getValidUri(page))
                     .title(title)
                     .snippet(snippetService.generateSnippet(bodyText, query, querySet))
                     .relevance(maxAbsoluteRelevance == 0.0f ? 0.0f : absoluteRelevance / maxAbsoluteRelevance)
@@ -337,6 +338,14 @@ public class SearchServiceImpl implements SearchService {
         response.setCount(size);
         response.setData(searchResults);
         return response;
+    }
+
+    private String getValidUri(Page page) {
+       String validUri = page.getPath();
+       if (validUri.startsWith("/")){
+           validUri = validUri.substring(1);
+       }
+       return validUri;
     }
 
     /**

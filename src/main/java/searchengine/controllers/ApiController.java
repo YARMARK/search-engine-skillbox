@@ -130,7 +130,8 @@ public class ApiController {
                                                  @RequestParam(value = "site", required = false) String site,
                                                  @RequestParam(value = "offset", defaultValue = "0") Integer offset,
                                                  @RequestParam(value = "limit", defaultValue = "10") Integer limit) {
-        log.debug("Search request, query {}, site {}, offset {}, limit {}", query, site, offset, limit);        SearchResponse response = searchService.search(query.trim(), site, offset, limit);
+        log.debug("Search request, query {}, site {}, offset {}, limit {}", query, site, offset, limit);
+        SearchResponse response = searchService.search(query.trim(), site, offset, limit);
         if (!response.isResult()) {
             return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
         }

@@ -71,7 +71,7 @@ public class SearchServiceImpl implements SearchService {
     @Override
     public SearchResponse search(String query, String site, Integer offset, Integer limit) {
         // Валидация и нормализация входных параметров
-        SearchResponse validationResult = validateRequest(query, site, offset, limit);
+        SearchResponse validationResult = validateRequest(query, site);
         if (!validationResult.isResult()) {
             return validationResult;
         }
@@ -98,11 +98,9 @@ public class SearchServiceImpl implements SearchService {
      *
      * @param query  поисковый запрос
      * @param site   URL сайта (может быть null)
-     * @param offset смещение
-     * @param limit  ограничение
      * @return {@link SearchResponse} с ошибкой при неуспехе либо пустой успешный ответ
      */
-    private SearchResponse validateRequest(String query, String site, Integer offset, Integer limit) {
+    private SearchResponse validateRequest(String query, String site) {
         if (query == null || query.trim().isEmpty()) {
             return createErrorResponse("Задан пустой поисковый запрос");
         }

@@ -105,7 +105,7 @@ public class ApiController {
         if (page == null) {
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
-                    .body(new IndexingResponse("Страница не найдена или не была проиндексирована"));
+                    .body(new IndexingResponse("Данная страница находится за пределами сайтов, указанных в конфигурационном файле"));
         }
 
         lemmaIndexer.saveAllLemmas(page);
@@ -130,7 +130,8 @@ public class ApiController {
                                                  @RequestParam(value = "site", required = false) String site,
                                                  @RequestParam(value = "offset", defaultValue = "0") Integer offset,
                                                  @RequestParam(value = "limit", defaultValue = "10") Integer limit) {
-        log.debug("Search request, query {}, site {}, offset {}, limit {}", query, site, offset, limit);        SearchResponse response = searchService.search(query.trim(), site, offset, limit);
+        log.debug("Search request, query {}, site {}, offset {}, limit {}", query, site, offset, limit);
+        SearchResponse response = searchService.search(query.trim(), site, offset, limit);
         if (!response.isResult()) {
             return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
         }

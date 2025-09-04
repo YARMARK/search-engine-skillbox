@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -72,6 +73,8 @@ public class IndexingServiceImpl implements IndexingService {
     private final List<Thread> threads = new ArrayList<>();
 
     private ExecutorService siteExecutor;
+
+    private final Set<Site> activeSites = ConcurrentHashMap.newKeySet();
 
     private static final String INDEXING_WAS_TERMINATED_BY_USER = "Индексация остановлена пользователем";
 
@@ -224,10 +227,9 @@ public class IndexingServiceImpl implements IndexingService {
         if (Thread.currentThread().isInterrupted()) {
             throw new InterruptedException();
         }
-
         Site site = prepareSite(info);
         log.info("Prepared site for indexing: {}", site.getUrl());
-
+        activeSites.add(site);
         try {
             crawlSite(site, userAgent, referrer);
             updateSiteStatus(site, SiteStatus.INDEXED, null);
@@ -235,6 +237,8 @@ public class IndexingServiceImpl implements IndexingService {
             log.error("Error processing site: {}", site.getUrl(), e);
             updateSiteStatus(site, SiteStatus.FAILED, e.getMessage());
             throw e;
+        } finally {
+            activeSites.remove(site);
         }
     }
 
@@ -365,7 +369,7 @@ public class IndexingServiceImpl implements IndexingService {
         });
         forkJoinPools.clear();
 
-        for (Site site : siteService.findSiteByStatus(SiteStatus.INDEXING)) {
+        for (Site site : activeSites) {
             updateSiteStatus(site, SiteStatus.FAILED, INDEXING_WAS_TERMINATED_BY_USER);
         }
         return new IndexingResponse();
@@ -397,10 +401,10 @@ public class IndexingServiceImpl implements IndexingService {
      *
      * @param pageUrl URL страницы для индексации
      * @return объект {@link Page}, содержащий данные индексированной страницы, или {@code null}, если:
-     *         <ul>
-     *             <li>URL не соответствует ни одному из сайтов конфигурации</li>
-     *             <li>Соединение с URL недоступно</li>
-     *         </ul>
+     * <ul>
+     *     <li>URL не соответствует ни одному из сайтов конфигурации</li>
+     *     <li>Соединение с URL недоступно</li>
+     * </ul>
      */
     @Override
     public Page indexPage(String pageUrl) {

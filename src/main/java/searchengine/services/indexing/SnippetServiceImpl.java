@@ -37,7 +37,6 @@ public class SnippetServiceImpl implements SnippetService {
         String lowerCaseQuery = query.toLowerCase();
         String lowerCaseContent = bodyText.toLowerCase();
 
-        // Найти полное совпадение
         int fullMatchIndex = lowerCaseContent.indexOf(lowerCaseQuery);
         if (fullMatchIndex != -1) {
             String snippet = createSnippet(bodyText, fullMatchIndex, lowerCaseQuery.length(), snippetLength);
@@ -46,7 +45,6 @@ public class SnippetServiceImpl implements SnippetService {
             return "..." + snippet + "...";
         }
 
-        // Найти совпадение по леммам
         for (String queryLemma : querySet) {
             int lemmaIndex = lowerCaseContent.indexOf(queryLemma.toLowerCase());
             if (lemmaIndex != -1) {
@@ -87,20 +85,17 @@ public class SnippetServiceImpl implements SnippetService {
                 .filter(s -> multiWordPattern.matcher(s).matches())
                 .collect(Collectors.toSet());
 
-        // Сначала выделяем многословные выражения
         for (String phrase : multiWordsQuery) {
             snippet = snippet.replaceAll("(?i)" + Pattern.quote(phrase), "<b>" + phrase + "</b>");
         }
 
-        // Разбиваем snippet на слова
         String[] words = snippet.split("\\s+");
         StringBuilder highlightedSnippet = new StringBuilder();
 
         for (String word : words) {
-            // Сохраняем оригинальное слово и преобразуем его в нижний регистр
+
             String cleanWord = word.replaceAll("[^a-zA-Zа-яА-Я]", "").toLowerCase();
 
-            // Проверяем, если очищенное слово есть в querySet
             if (querySet.contains(cleanWord) && !word.contains("<b>")) { // чтобы избежать двойного выделения
                 highlightedSnippet.append("<b>").append(word).append("</b>");
             } else {
@@ -109,7 +104,6 @@ public class SnippetServiceImpl implements SnippetService {
             highlightedSnippet.append(" ");
         }
 
-        // Удаляем последний пробел
         return highlightedSnippet.toString().trim();
     }
 } 

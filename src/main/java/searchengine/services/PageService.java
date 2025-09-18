@@ -1,6 +1,5 @@
 package searchengine.services;
 
-import org.springframework.data.domain.Pageable;
 import searchengine.model.Lemma;
 import searchengine.model.Page;
 import searchengine.model.Site;

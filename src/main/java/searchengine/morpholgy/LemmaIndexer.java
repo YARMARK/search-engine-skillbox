@@ -72,7 +72,6 @@ public class LemmaIndexer {
         for (int i = 0; i < entries.size(); i += batchSize) {
             List<Map.Entry<String, Integer>> batch = entries.subList(i, Math.min(i + batchSize, entries.size()));
             try {
-                // Сериализуем запись по сайту, чтобы снизить шанс дедлоков между разными страницами одного сайта
                 siteScopedLockManager.executeWithLock(siteId, () -> processSingleBatch(batch, page));
                 log.debug("{} from {} batches are saved({} lemmas)",
                         (i / batchSize) + 1, totalBatches, batch.size());

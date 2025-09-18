@@ -68,10 +68,6 @@ public class LemmaFinder {
         lemmaFormsMap = loadLemmaForms("lemma-forms.txt");
     }
 
-    private LemmaFinder() {
-        throw new RuntimeException("Constructor rejected");
-    }
-
     /**
      * Загружает карту лемм и их вариантов из файла.
      *
@@ -166,7 +162,6 @@ public class LemmaFinder {
 
         String normalWord = normalForms.get(0);
 
-        // Пропуск лемм длиной 1 или 2 символа
         if (normalWord.length() <= 2) {
             return;
         }

@@ -70,25 +70,22 @@ public class SearchServiceImpl implements SearchService {
      */
     @Override
     public SearchResponse search(String query, String site, Integer offset, Integer limit) {
-        // Валидация и нормализация входных параметров
+
         SearchResponse validationResult = validateRequest(query, site);
         if (!validationResult.isResult()) {
             return validationResult;
         }
 
-        // Извлечение и фильтрация лемм
         List<String> lemmas = extractAndFilterLemmas(query.trim());
         if (!hasValidLemmas(lemmas)) {
             return createErrorResponse("Все леммы исключены из запроса");
         }
 
-        // Поиск релевантных страниц
         List<Page> pages = findCandidatePages(lemmas, site != null ? site.trim() : null);
         if (!hasSearchResults(pages)) {
             return createEmptyResponse();
         }
 
-        // Расчет релевантности и создание DTO
         List<SearchDto> searchResults = scoreAndBuildDtos(pages, query.trim(), lemmas, limit, offset);
         return createSuccessResponse(searchResults, pages.size());
     }
@@ -105,13 +102,12 @@ public class SearchServiceImpl implements SearchService {
             return createErrorResponse("Задан пустой поисковый запрос");
         }
 
-        // Если указан конкретный сайт, проверяем только его статус
         if (site != null) {
             if (!isSiteIndexed(site)) {
                 return createErrorResponse("Cайт не найден или еще не проиндексирован");
             }
         } else {
-            // Если сайт не указан, проверяем что есть хотя бы один проиндексированный сайт
+
             List<Site> indexedSites = siteService.findAllSites().stream()
                     .filter(s -> s.getStatus() == SiteStatus.INDEXED)
                     .toList();
@@ -133,7 +129,7 @@ public class SearchServiceImpl implements SearchService {
     private List<String> extractAndFilterLemmas(String query) {
         List<String> lemmas = extractLemmas(query);
         if (lemmas.isEmpty()) {
-            return lemmas; // Возвращаем пустой список, если не удалось извлечь леммы
+            return lemmas;
         }
         return filterLemmas(lemmas);
     }
@@ -168,11 +164,9 @@ public class SearchServiceImpl implements SearchService {
      * @return список объектов {@link SearchDto} с данными результатов
      */
     private List<SearchDto> scoreAndBuildDtos(List<Page> pages, String query, List<String> lemmas, Integer limit, Integer offset) {
-        // Нормализация параметров пагинации
         int normalizedOffset = Math.max(0, offset);
         int normalizedLimit = Math.max(1, limit);
 
-        // Создаем локальный набор словоформ для текущего запроса
         Set<String> queryForms = createQueryFormsSet(lemmas);
 
         return calculateRelevanceAndCreateDtos(pages, query, lemmas, normalizedLimit, normalizedOffset, queryForms);
@@ -224,13 +218,12 @@ public class SearchServiceImpl implements SearchService {
 
         if (siteUrl == null) {
             log.debug("Searching across all indexed sites");
-            // Получаем только проиндексированные сайты
+
             List<Site> indexedSites = siteService.findAllSites().stream()
                     .filter(s -> s.getStatus() == SiteStatus.INDEXED)
                     .toList();
             for (String lemma : lemmas) {
                 Set<Page> pagesWithLemma = new HashSet<>();
-                // Ищем страницы только на проиндексированных сайтах
                 for (Site site : indexedSites) {
                     pagesWithLemma.addAll(pageService.findAllPagesByLemmaAndSite(lemma, site));
                 }
@@ -289,7 +282,6 @@ public class SearchServiceImpl implements SearchService {
             Page page = entry.getKey();
             float absoluteRelevance = entry.getValue();
 
-            // Parse HTML once per page
             Document doc = Jsoup.parse(page.getContent());
             String title = snippetService.extractTitle(doc);
             String bodyText = doc.text();

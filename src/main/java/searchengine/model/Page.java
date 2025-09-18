@@ -14,7 +14,6 @@ import lombok.ToString;
 
 import java.io.Serializable;
 
-import static jakarta.persistence.FetchType.EAGER;
 import static jakarta.persistence.GenerationType.IDENTITY;
 /**
  * Сущность Page представляет страницу сайта, которая была проиндексирована.
